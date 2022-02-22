@@ -1,0 +1,17 @@
+{
+  "name": "editorial-status-machine",
+  "version": "0.0.0",
+  "description": "Model draft, review, scheduled, published and retired content transitions.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edilec/editorial-status-machine"
+  }
+}
