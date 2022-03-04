@@ -1,0 +1,85 @@
+[
+  {
+    "commandId": "cmd-001",
+    "document": "post-hello",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-03-01T09:00:00Z",
+    "expectedRevision": 0,
+    "note": "first draft ready for review"
+  },
+  {
+    "commandId": "cmd-002",
+    "document": "post-hello",
+    "action": "approve",
+    "actor": "bob",
+    "at": "2026-03-02T10:00:00Z",
+    "expectedRevision": 1
+  },
+  {
+    "commandId": "cmd-003",
+    "document": "post-hello",
+    "action": "schedule",
+    "actor": "dana",
+    "at": "2026-03-03T11:00:00Z",
+    "expectedRevision": 2,
+    "scheduledFor": "2026-03-20T08:00:00Z"
+  },
+  {
+    "commandId": "cmd-010",
+    "document": "post-roadmap",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-03-04T09:00:00Z",
+    "expectedRevision": 0
+  },
+  {
+    "commandId": "cmd-011",
+    "document": "post-roadmap",
+    "action": "reject",
+    "actor": "bob",
+    "at": "2026-03-05T09:00:00Z",
+    "expectedRevision": 1,
+    "note": "needs the migration section"
+  },
+  {
+    "commandId": "cmd-012",
+    "document": "post-roadmap",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-03-06T09:00:00Z",
+    "expectedRevision": 2
+  },
+  {
+    "commandId": "cmd-013",
+    "document": "post-roadmap",
+    "action": "approve",
+    "actor": "bob",
+    "at": "2026-03-07T09:00:00Z",
+    "expectedRevision": 3
+  },
+  {
+    "commandId": "cmd-014",
+    "document": "post-roadmap",
+    "action": "publish",
+    "actor": "dana",
+    "at": "2026-03-08T09:00:00Z",
+    "expectedRevision": 4
+  },
+  {
+    "commandId": "cmd-015",
+    "document": "post-roadmap",
+    "action": "retire",
+    "actor": "eve",
+    "at": "2026-03-09T09:00:00Z",
+    "expectedRevision": 5
+  },
+  {
+    "commandId": "cmd-014",
+    "document": "post-roadmap",
+    "action": "publish",
+    "actor": "dana",
+    "at": "2026-03-08T09:00:00Z",
+    "expectedRevision": 4
+  }
+]

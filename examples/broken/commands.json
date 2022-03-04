@@ -1,0 +1,161 @@
+[
+  {
+    "commandId": "bad-001",
+    "document": "post-skip",
+    "action": "publish",
+    "actor": "dana",
+    "at": "2026-03-01T08:00:00Z",
+    "expectedRevision": 0,
+    "note": "straight from draft to published: the lifecycle has no such edge"
+  },
+  {
+    "commandId": "bad-002",
+    "document": "post-auth",
+    "action": "submit",
+    "actor": "dana",
+    "at": "2026-03-01T08:05:00Z",
+    "expectedRevision": 0,
+    "note": "dana publishes, dana does not author"
+  },
+  {
+    "commandId": "bad-003",
+    "document": "post-stale",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-03-01T08:10:00Z",
+    "expectedRevision": 0
+  },
+  {
+    "commandId": "bad-004",
+    "document": "post-stale",
+    "action": "approve",
+    "actor": "bob",
+    "at": "2026-03-01T08:15:00Z",
+    "expectedRevision": 0,
+    "note": "written against revision 0, which bad-003 has already superseded"
+  },
+  {
+    "commandId": "bad-005",
+    "document": "post-stale",
+    "action": "archive",
+    "actor": "bob",
+    "at": "2026-03-01T08:20:00Z",
+    "expectedRevision": 1
+  },
+  {
+    "commandId": "bad-006",
+    "document": "post-stale",
+    "action": "approve",
+    "actor": "mallory",
+    "at": "2026-03-01T08:25:00Z",
+    "expectedRevision": 1
+  },
+  {
+    "commandId": "bad-007",
+    "document": "post-stale",
+    "action": "approve",
+    "actor": "bob",
+    "at": "2026-03-01T08:30:00Z",
+    "expectedRevision": 1,
+    "scheduledFor": "2026-03-30T00:00:00Z"
+  },
+  {
+    "commandId": "bad-003",
+    "document": "post-stale",
+    "action": "submit",
+    "actor": "bob",
+    "at": "2026-03-01T08:10:00Z",
+    "expectedRevision": 0,
+    "note": "the id of a command already applied, carrying a different instruction"
+  },
+  {
+    "commandId": "bad-009",
+    "document": "post-future",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-04-01T00:00:00Z",
+    "expectedRevision": 0
+  },
+  {
+    "commandId": "bad-010",
+    "document": "post-keys",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-03-01T08:40:00Z",
+    "expectedRevision": 0,
+    "reason": "a one-character typo for note"
+  },
+  {
+    "commandId": "bad-011",
+    "document": "post-norev",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-03-01T08:45:00Z"
+  },
+  {
+    "commandId": "bad-012",
+    "document": "post-sched",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-03-02T09:00:00Z",
+    "expectedRevision": 0
+  },
+  {
+    "commandId": "bad-013",
+    "document": "post-sched",
+    "action": "approve",
+    "actor": "bob",
+    "at": "2026-03-03T09:00:00Z",
+    "expectedRevision": 1
+  },
+  {
+    "commandId": "bad-014",
+    "document": "post-sched",
+    "action": "schedule",
+    "actor": "dana",
+    "at": "2026-03-04T09:00:00Z",
+    "expectedRevision": 2,
+    "scheduledFor": "2026-03-05T00:00:00Z"
+  },
+  {
+    "commandId": "bad-015",
+    "document": "post-sched",
+    "action": "schedule",
+    "actor": "dana",
+    "at": "2026-03-05T09:00:00Z",
+    "expectedRevision": 2,
+    "scheduledFor": "2026-03-25T00:00:00Z"
+  },
+  {
+    "commandId": "bad-016",
+    "document": "post-sched",
+    "action": "publish",
+    "actor": "dana",
+    "at": "2026-03-06T09:00:00Z",
+    "expectedRevision": 3
+  },
+  {
+    "commandId": "bad-017",
+    "document": "post-sched",
+    "action": "unschedule",
+    "actor": "dana",
+    "at": "2026-03-01T09:00:00Z",
+    "expectedRevision": 3
+  },
+  {
+    "commandId": "bad-018",
+    "document": "post-space",
+    "action": "submit",
+    "actor": " alice",
+    "at": "2026-03-07T09:00:00Z",
+    "expectedRevision": 0
+  },
+  {
+    "commandId": "bad-019",
+    "document": "post-time",
+    "action": "submit",
+    "actor": "alice",
+    "at": "2026-02-31T00:00:00Z",
+    "expectedRevision": 0
+  }
+]
