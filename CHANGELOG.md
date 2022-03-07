@@ -21,10 +21,11 @@ All notable changes to this project are documented in this file.
 - optimistic concurrency through a required `expectedRevision` on every
   command, so a command written against a superseded revision cannot silently
   overwrite the decision that replaced it;
-- scheduling rules driven entirely by an injected clock: `--now` is required,
-  nothing under `src/` reads the wall clock, and scheduling into the past,
-  publishing before a schedule has come due, and commands timestamped in the
-  future are each their own refusal;
+- scheduling rules driven entirely by an injected clock: `--now` is required
+  and nothing under `src/` reads the wall clock. A schedule must be after the
+  instant the command was issued, so replaying a batch later decides it the
+  same way; whether a schedule has come due, and whether a command is
+  timestamped in the future, are the two questions judged against `--now`;
 - an append-only, hash-chained event log — SHA-256 over the previous hash and a
   positional canonical body — verified end to end on load for JSON shape, field
   vocabulary, identifiers, instants, sequence contiguity, chain integrity,

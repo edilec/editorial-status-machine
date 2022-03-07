@@ -242,12 +242,23 @@ export function evaluateCommand(machine, document, command, nowMs) {
       suggestion: 'Remove scheduledFor, or use the transition that sets a schedule.',
     }
   }
-  if (transition.setsSchedule && command.scheduledForMs <= nowMs) {
+  /**
+   * A schedule is judged against the instant the command was issued, not
+   * against the run's clock.
+   *
+   * "In the past" means the schedule had already passed when someone chose it.
+   * Judging it against `now` instead would make the same batch decide
+   * differently depending on when it is replayed, and would retroactively
+   * invalidate a schedule that was perfectly sensible when it was set. The
+   * run's clock decides the other half -- whether a schedule has come due --
+   * which is `publish-before-schedule` below.
+   */
+  if (transition.setsSchedule && command.scheduledForMs <= command.atMs) {
     return {
       ok: false,
       ruleId: 'schedule-in-past',
-      message: 'scheduledFor is not after the clock this run was given, so the schedule would already have come due the moment it was set.',
-      evidence: `${excerpt(command.scheduledFor, 40)} <= now`,
+      message: 'scheduledFor is not after the instant the command was issued, so the schedule would already have come due the moment it was set.',
+      evidence: `${excerpt(command.scheduledFor, 40)} <= ${excerpt(command.at, 40)}`,
     }
   }
 

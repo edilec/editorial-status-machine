@@ -38,8 +38,19 @@ const CONTROL = new RegExp(
   'g',
 )
 
-/** The same set, used to decide whether an identifier is acceptable at all. */
-const CONTROL_PRESENT = new RegExp(CONTROL.source)
+/**
+ * What an identifier may not contain: the whole C0 range including tab,
+ * newline and carriage return, DEL, the C1 range, and both Unicode line
+ * separators. `CONTROL` above leaves the three ASCII whitespace controls to
+ * the `\s+` collapse that follows it; an identifier has no such second pass,
+ * and a document id holding a newline is exactly the value that forged a line
+ * in a human report elsewhere in this catalog.
+ */
+const FORBIDDEN_IN_IDENTIFIER = new RegExp(
+  `[${String.fromCharCode(0)}-${String.fromCharCode(31)}` +
+  `${String.fromCharCode(127)}-${String.fromCharCode(159)}` +
+  `${String.fromCharCode(0x2028)}${String.fromCharCode(0x2029)}]`,
+)
 
 export const EXCERPT_LIMIT = 160
 export const MAX_IDENTIFIER_LENGTH = 200
@@ -71,7 +82,7 @@ export function isIdentifier(value) {
   if (typeof value !== 'string') return false
   if (value.length === 0 || value.length > MAX_IDENTIFIER_LENGTH) return false
   if (value.trim() !== value) return false
-  return !CONTROL_PRESENT.test(value)
+  return !FORBIDDEN_IN_IDENTIFIER.test(value)
 }
 
 /**

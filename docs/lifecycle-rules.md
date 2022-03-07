@@ -36,10 +36,10 @@ finding must never carry an absolute host path.
 ## The clock
 
 `--now` is **required** and is the only clock this tool has. Nothing under `src/` calls
-`Date.now()` or constructs a current date. Every time-dependent decision — whether a command is
-timestamped in the future, whether a schedule is in the past, whether a scheduled document has
-come due — is taken against that value, so the same inputs and the same `--now` always produce
-byte-identical output.
+`Date.now()` or constructs a current date. Both decisions that need a present moment — whether a
+command is timestamped in the future, and whether a scheduled document has come due — are taken
+against that value, so the same inputs and the same `--now` always produce byte-identical
+output.
 
 `--now`, every command `at`, and every `scheduledFor` must be an ISO-8601 **UTC** instant:
 `YYYY-MM-DDTHH:MM:SSZ`, optionally with one to three fractional digits. Local offsets are refused
@@ -93,6 +93,15 @@ perform and a transition everybody may perform must not look the same.
 requires the command to carry `scheduledFor` and records it on the document; every other
 transition clears it. A transition that `requiresSchedule` may only run against a document that
 carries a schedule the clock has already reached.
+
+The two halves of a schedule are judged against different instants, on purpose:
+
+- **Is the schedule sensible?** `scheduledFor` must be after the command's own `at` — the instant
+  someone chose it. Judging that against `--now` instead would make the same batch decide
+  differently depending on when it is replayed, and would retroactively refuse a schedule that was
+  perfectly sensible when it was set.
+- **Has the schedule come due?** That is judged against `--now`, and nothing else. It is the one
+  question a clock is actually for.
 
 ## Commands
 
@@ -306,7 +315,7 @@ last-wins.
 | `machine-transition-no-roles` | error | A transition allows no role; an empty list is refused, not read as "anyone". |
 | `no-commands` | warning | The batch is empty, so the run decided nothing and proved nothing. |
 | `publish-before-schedule` | error | The document's schedule has not been reached by the given clock. |
-| `schedule-in-past` | error | `scheduledFor` is not after the given clock. |
+| `schedule-in-past` | error | `scheduledFor` is not after the instant the command was issued. |
 | `schedule-missing` | error | A transition requiring a schedule was issued against a document with none. |
 | `schedule-target-missing` | error | A scheduling transition carried no `scheduledFor`. |
 | `schedule-target-unexpected` | error | A non-scheduling transition carried a `scheduledFor` that would be discarded. |
