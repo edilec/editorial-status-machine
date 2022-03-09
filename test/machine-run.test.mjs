@@ -90,6 +90,24 @@ test('a retry is recognised even though its expectedRevision is long superseded'
   assert.equal(report.status, 'pass')
 })
 
+test('a note is prose, not part of a command\u2019s identity', async () => {
+  const reworded = { ...TO_PUBLISHED[2], note: 'resending after a timeout' }
+  const { report, newEvents } = await run([...TO_PUBLISHED, reworded])
+  assert.equal(report.status, 'pass')
+  assert.deepEqual(rules(report), ['command-replayed'])
+  assert.equal(newEvents.length, 3)
+})
+
+test('a refused command id is decided again, not treated as applied', async () => {
+  const refused = command({ commandId: 'c-x', actor: 'dana' })
+  const { report, newEvents } = await run([refused, refused])
+  assert.equal(report.status, 'fail')
+  assert.deepEqual(rules(report), ['transition-unauthorized', 'transition-unauthorized'])
+  assert.equal(report.summary.rejected, 2)
+  assert.equal(report.summary.replayed, 0)
+  assert.equal(newEvents.length, 0)
+})
+
 test('a used command id carrying different instructions is refused, not swallowed', async () => {
   const forged = { ...TO_PUBLISHED[2], actor: 'eve' }
   const { report, newEvents } = await run([...TO_PUBLISHED, forged])
@@ -125,6 +143,25 @@ test('a command that would skip a state fails the run', async () => {
   assert.equal(report.status, 'fail')
   assert.deepEqual(rules(report), ['transition-invalid'])
   assert.equal(newEvents.length, 0)
+})
+
+test('decisions record what happened to every command, in batch order', async () => {
+  const { decisions, report } = await run([
+    ...TO_PUBLISHED,
+    TO_PUBLISHED[2],
+    command({ commandId: 'c-bad', document: 'post', action: 'retire', actor: 'alice', at: '2026-03-04T09:00:00Z', expectedRevision: 3 }),
+  ])
+  assert.deepEqual(decisions.map((item) => item.index), [0, 1, 2, 3, 4])
+  assert.deepEqual(decisions.map((item) => item.outcome), ['applied', 'applied', 'applied', 'replayed', 'rejected'])
+  assert.deepEqual(decisions.map((item) => item.ruleId), [null, null, null, 'command-replayed', 'transition-unauthorized'])
+  assert.equal(decisions.length, report.summary.checked)
+})
+
+test('a bounded-out batch still reports how many commands the file held', async () => {
+  const { report } = await run(TO_PUBLISHED, { limits: { maxCommands: 2 } })
+  assert.equal(report.status, 'incomplete')
+  assert.equal(report.summary.commands, 3, 'the count must not read as an empty batch')
+  assert.equal(report.summary.checked, 0)
 })
 
 test('a run over a prior log continues from the state the log leaves behind', async () => {

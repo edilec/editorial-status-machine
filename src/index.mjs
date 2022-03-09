@@ -230,8 +230,12 @@ export async function resolveEventLog(rootReal, destination) {
     )
   }
   if (tail.length === 0) {
+    // A destination that exists must be a regular file. A directory is the
+    // obvious mistake; a FIFO or a device node is the one that would hang the
+    // append forever instead of failing.
     const info = await stat(resolved)
     if (info.isDirectory()) throw new TypeError('Event log destination is a directory, not a file')
+    if (!info.isFile()) throw new TypeError('Event log destination is not a regular file')
   }
   return resolved
 }
@@ -478,10 +482,12 @@ export async function runEditorialMachine(options = {}) {
   // Commands -----------------------------------------------------------
   const commandText = await readText(collector, commandPath.relative, commandPath.real, limits)
   let commandList = null
+  let commandCount = 0
   let commandFailure = 'the command batch could not be read'
   if (commandText !== null) {
     const parsed = readJson(collector, commandPath.relative, commandText)
     if (parsed.ok) {
+      if (Array.isArray(parsed.value)) commandCount = parsed.value.length
       if (!Array.isArray(parsed.value)) {
         record(collector, {
           file: commandPath.relative,
@@ -533,7 +539,6 @@ export async function runEditorialMachine(options = {}) {
     let previousHash = priorEvents.length === 0 ? GENESIS_HASH : priorEvents[priorEvents.length - 1].hash
     const known = new Map(byCommandId)
     const seenDocuments = new Set(documents.keys())
-    let boundedOut = false
 
     for (let index = 0; index < commandList.length; index += 1) {
       const raw = commandList[index]
@@ -606,8 +611,12 @@ export async function runEditorialMachine(options = {}) {
           message: `Command names document number ${seenDocuments.size + 1}, above the maxDocuments limit of ${limits.maxDocuments}; this command and every command after it were left undecided.`,
           suggestion: 'Raise --max-documents, or split the batch by document.',
         })
+        // Events already built stay valid and may be appended -- they record
+        // commands that really were accepted. The run is `incomplete`, so no
+        // consumer mistakes a half-applied batch for a finished one, and
+        // re-running with a raised limit replays the applied commands by id
+        // rather than applying them twice.
         collector.incomplete = true
-        boundedOut = true
         break
       }
 
@@ -658,11 +667,6 @@ export async function runEditorialMachine(options = {}) {
       })
     }
 
-    // Events built before a bound was hit are still correct and may be
-    // appended, but the batch was not finished: `boundedOut` has already made
-    // the run `incomplete`, so no consumer mistakes a half-applied batch for a
-    // pass.
-    void boundedOut
   }
 
   collector.rows.sort((left, right) =>
@@ -688,7 +692,7 @@ export async function runEditorialMachine(options = {}) {
       errors,
       warnings,
       info: findings.length - errors - warnings,
-      commands: commandList === null ? 0 : commandList.length,
+      commands: commandCount,
       applied,
       replayed: replayedCount,
       rejected,

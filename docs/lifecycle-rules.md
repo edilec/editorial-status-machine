@@ -134,6 +134,18 @@ broken.
 A command that reuses an id with **different** instructions is not a retry. The recorded event
 carries a hash of the command that produced it, and a mismatch is `command-replay-mismatch`.
 
+Three details of that, stated so nobody has to infer them:
+
+- A command's **identity** is `document`, `action`, `actor`, `at`, `expectedRevision` and
+  `scheduledFor`. `note` is free-form prose that changes no decision, so it is not part of the
+  identity: re-sending a command with a reworded note is a retry, not a conflict.
+- Only **applied** commands enter the replay index. Re-sending a command id that was *refused* is
+  evaluated again from scratch, and refused again for the same reason.
+- Events are appended for the commands that were accepted **even when others in the same batch
+  were refused, and even when a limit ended the batch early**. An accepted transition is a fact;
+  withholding it would leave the log disagreeing with what the report says happened. Re-running
+  with the refusals fixed replays the applied commands by id rather than applying them twice.
+
 ### The order commands are refused in
 
 After the shape checks above, a command is evaluated against the machine and the document's
