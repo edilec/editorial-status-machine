@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
-import { formatReport, runEditorialMachine } from '../src/index.mjs'
+import { EXCERPT_LIMIT, createFinding, formatReport, runEditorialMachine } from '../src/index.mjs'
 import { CLI, MACHINE, NOW, TO_PUBLISHED, command, projectDirectory, workspace } from './support.mjs'
 
 const run = promisify(execFile)
@@ -72,6 +72,59 @@ test('every path that obtains no evidence reports incomplete, never pass', async
   }
 })
 
+test('a run is incomplete exactly when it did not decide every command', async () => {
+  /**
+   * The structural invariant, stated once and checked over every shape of run
+   * this tool can produce. `incomplete` means "evidence was not obtained", and
+   * the observable form of that is a command in the batch that nobody decided.
+   *
+   * This is what lets the three surviving `incomplete = true` assignments be
+   * the only ones in the source: a fourth, placed beside a read failure, could
+   * never change an outcome and so could never be killed by a test. Deleting
+   * any of the three breaks the biconditional below.
+   */
+  const cases = [
+    ['a clean batch', () => decide(TO_PUBLISHED)],
+    ['a refused batch', () => decide([command({ actor: 'dana' })])],
+    ['an empty batch', () => decide([])],
+    ['an uncompilable machine', () => decide(TO_PUBLISHED, { machine: { ...MACHINE, initialState: 'x' } })],
+    ['a machine that is not JSON', () => decide(TO_PUBLISHED, {
+      mutate: ({ root }) => writeFile(`${root}/machine.json`, '{ broken', 'utf8'),
+    })],
+    ['a command file that is not JSON', () => decide(TO_PUBLISHED, {
+      mutate: ({ root }) => writeFile(`${root}/commands.json`, '[ broken', 'utf8'),
+    })],
+    ['a command file that is not an array', () => decide(TO_PUBLISHED, {
+      mutate: ({ root }) => writeFile(`${root}/commands.json`, '{}', 'utf8'),
+    })],
+    ['a command file that is not UTF-8', () => decide(TO_PUBLISHED, {
+      mutate: ({ root }) => writeFile(`${root}/commands.json`, Buffer.from([0x5b, 0xff, 0x5d])),
+    })],
+    ['an oversized input', () => decide(TO_PUBLISHED, { limits: { maxFileBytes: 30 } })],
+    ['an oversized batch', () => decide(TO_PUBLISHED, { limits: { maxCommands: 1 } })],
+    ['a batch past maxDocuments', () => decide(
+      [command({ commandId: 'a', document: 'a' }), command({ commandId: 'b', document: 'b' })],
+      { limits: { maxDocuments: 1 } },
+    )],
+    ['a log that will not verify', () => decide(TO_PUBLISHED, {
+      mutate: ({ log }) => writeFile(log, 'not json\n', 'utf8'),
+    })],
+  ]
+
+  const statuses = new Set()
+  for (const [label, build] of cases) {
+    const { report } = await build()
+    const decidedEverything = report.summary.checked > 0 && report.summary.checked === report.summary.commands
+    assert.equal(
+      report.status === 'incomplete',
+      !decidedEverything,
+      `${label}: status ${report.status} with ${report.summary.checked} of ${report.summary.commands} decided`,
+    )
+    statuses.add(report.status)
+  }
+  assert.deepEqual([...statuses].sort(), ['fail', 'incomplete', 'pass'], 'the cases must span all three statuses')
+})
+
 test('the empty batch is held back by the flag alone, not by an error finding', async () => {
   // Nothing here is an `error`. Delete the `incomplete = true` beside
   // `no-commands` and this run reports `pass` with `checked: 0` -- green on no
@@ -98,6 +151,49 @@ test('pass is never reported with nothing checked', async () => {
   assert.ok(observed.some(([status]) => status === 'pass'), 'at least one case must actually pass')
   assert.ok(observed.some(([status]) => status === 'incomplete'))
   assert.ok(observed.some(([status]) => status === 'fail'))
+})
+
+test('createFinding sanitises every string it copies, not only the evidence', () => {
+  // The last line of defence, tested directly. Construction sites already
+  // bound what they embed; if one of them ever forgets, this is what stops a
+  // line terminator reaching the report -- and a guarantee with no test that
+  // kills it is a guarantee that quietly stops being true.
+  const finding = createFinding({
+    ruleId: 'identifier-invalid',
+    message: 'bad\nERROR   forged/ forged-rule invented',
+    file: 'commands\njson',
+    pointer: '/commands\n/0',
+    evidence: `post${String.fromCharCode(0x2028)}id`,
+    suggestion: 'fix\nit',
+  })
+
+  assert.equal(finding.message, 'bad ERROR forged/ forged-rule invented')
+  assert.equal(finding.location.file, 'commands json')
+  assert.equal(finding.location.pointer, '/commands /0')
+  assert.equal(finding.evidence, 'post id')
+  assert.equal(finding.suggestion, 'fix it')
+  for (const value of [
+    finding.message, finding.location.file, finding.location.pointer,
+    finding.evidence, finding.suggestion,
+  ]) {
+    assert.equal(value.split('\n').length, 1)
+  }
+})
+
+test('createFinding bounds every string it copies', () => {
+  const finding = createFinding({
+    ruleId: 'identifier-invalid',
+    message: 'm'.repeat(1000),
+    file: 'f'.repeat(1000),
+    pointer: 'p'.repeat(1000),
+    evidence: 'e'.repeat(1000),
+    suggestion: 's'.repeat(1000),
+  })
+  assert.equal(finding.evidence.length, EXCERPT_LIMIT + 3)
+  assert.ok(finding.message.length < 1000)
+  assert.ok(finding.location.file.length < 1000)
+  assert.ok(finding.location.pointer.length < 1000)
+  assert.ok(finding.suggestion.length < 1000)
 })
 
 test('an identifier carrying a line terminator cannot forge a line in the report', async () => {

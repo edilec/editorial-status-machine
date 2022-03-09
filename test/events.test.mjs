@@ -170,6 +170,38 @@ test('a log whose replay disagrees with an event’s "from" is refused', () => {
   assert.ok(result.problems.some((item) => item.ruleId === 'event-state-mismatch'))
 })
 
+test('a revision that does not follow the one before it is refused', () => {
+  const lines = log(THREE_STEPS).trimEnd().split('\n')
+  const second = JSON.parse(lines[1])
+  assert.equal(second.revision, 2)
+  second.revision = 3
+  second.hash = eventHash(JSON.parse(lines[0]).hash, second)
+
+  const result = replay(`${lines[0]}\n${JSON.stringify(second)}\n`)
+  assert.equal(result.trusted, false)
+  assert.ok(result.problems.some((item) => item.ruleId === 'event-revision-broken'))
+  // A gap in the revisions is how an event that was never recorded hides: the
+  // optimistic-concurrency check rests on the revision being the count of
+  // events, so the chain alone -- which still verifies -- is not enough.
+  assert.equal(result.problems.some((item) => item.ruleId === 'event-chain-broken'), false)
+  assert.equal(result.documents.size, 1)
+  assert.equal(result.documents.get('post').revision, 1)
+})
+
+test('a document whose events move backwards in time is refused', () => {
+  const lines = log(THREE_STEPS).trimEnd().split('\n')
+  const second = JSON.parse(lines[1])
+  second.at = '2026-02-01T09:00:00.000Z'
+  second.hash = eventHash(JSON.parse(lines[0]).hash, second)
+
+  const result = replay(`${lines[0]}\n${JSON.stringify(second)}\n`)
+  assert.equal(result.trusted, false)
+  assert.ok(result.problems.some((item) => item.ruleId === 'event-out-of-order'))
+  // The chain still verifies: only the times are wrong, so the hash alone
+  // would have let this through.
+  assert.equal(result.problems.some((item) => item.ruleId === 'event-chain-broken'), false)
+})
+
 test('a log that records one command id twice is refused', () => {
   const lines = log(THREE_STEPS).trimEnd().split('\n')
   const second = JSON.parse(lines[1])

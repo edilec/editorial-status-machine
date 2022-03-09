@@ -270,14 +270,23 @@ export function createFinding(row) {
   return finding
 }
 
-/** Read one file, reporting every way it could fail to become text. */
+/**
+ * Read one file, reporting every way it could fail to become text.
+ *
+ * None of these paths sets `incomplete` itself. A file that did not become
+ * text leaves the machine uncompiled, the log unverified or the batch unread,
+ * and every one of those ends at `notEvaluated`, which sets the flag once. A
+ * second assignment here would look like defence and be untestable: no
+ * mutation of it could ever change an outcome, so no test could ever fail when
+ * it was removed. The invariant that actually holds -- a run that did not
+ * decide every command is `incomplete` -- is asserted directly instead.
+ */
 async function readText(collector, file, real, limits) {
   let info
   try {
     info = await stat(real)
   } catch (error) {
     record(collector, { file, ruleId: 'input-unreadable', message: `File could not be inspected: ${error.code ?? 'unknown error'}.` })
-    collector.incomplete = true
     return null
   }
   if (!info.isFile()) {
@@ -286,7 +295,6 @@ async function readText(collector, file, real, limits) {
       ruleId: 'input-unreadable',
       message: 'Path is not a regular file, so nothing could be read from it.',
     })
-    collector.incomplete = true
     return null
   }
   if (info.size > limits.maxFileBytes) {
@@ -296,7 +304,6 @@ async function readText(collector, file, real, limits) {
       message: `File is ${info.size} bytes, above the maxFileBytes limit of ${limits.maxFileBytes}; it was not read.`,
       suggestion: 'Raise --max-file-bytes, or split the input.',
     })
-    collector.incomplete = true
     return null
   }
   let bytes
@@ -304,7 +311,6 @@ async function readText(collector, file, real, limits) {
     bytes = await readFile(real)
   } catch (error) {
     record(collector, { file, ruleId: 'input-unreadable', message: `File could not be read: ${error.code ?? 'unknown error'}.` })
-    collector.incomplete = true
     return null
   }
   const decoded = decodeUtf8(bytes)
@@ -315,7 +321,6 @@ async function readText(collector, file, real, limits) {
       message: 'File is not valid UTF-8; it was not parsed and nothing was read from it.',
       suggestion: 'Re-encode the file as UTF-8.',
     })
-    collector.incomplete = true
     return null
   }
   return decoded.text
@@ -330,7 +335,6 @@ function readJson(collector, file, text) {
       ruleId: 'input-not-json',
       message: `File is not valid JSON: ${excerpt(error.message, 120)}.`,
     })
-    collector.incomplete = true
     return { ok: false, value: null }
   }
 }
@@ -411,7 +415,6 @@ export async function runEditorialMachine(options = {}) {
           ...(item.suggestion === undefined ? {} : { suggestion: item.suggestion }),
         })
       }
-      if (machine === null) collector.incomplete = true
     }
   }
 
@@ -435,7 +438,6 @@ export async function runEditorialMachine(options = {}) {
           ruleId: 'input-unreadable',
           message: `Event log could not be inspected: ${error.code ?? 'unknown error'}.`,
         })
-        collector.incomplete = true
         logTrusted = false
       }
       present = false
@@ -458,8 +460,12 @@ export async function runEditorialMachine(options = {}) {
           ...(item.evidence === undefined ? {} : { evidence: item.evidence }),
           ...(item.suggestion === undefined ? {} : { suggestion: item.suggestion }),
         })
-        collector.incomplete = true
       }
+      // No `incomplete` flag here on purpose. `parseEventLog` reports a problem
+      // only when it distrusts the log, so `logTrusted` below is false whenever
+      // this loop ran, and `notEvaluated` sets the flag once for the run. A
+      // second assignment here would be a guarantee no test could ever kill --
+      // comfort rather than defence.
       logTrusted = replayed.trusted
       if (logTrusted) {
         priorEvents = replayed.events
@@ -472,6 +478,7 @@ export async function runEditorialMachine(options = {}) {
   // Commands -----------------------------------------------------------
   const commandText = await readText(collector, commandPath.relative, commandPath.real, limits)
   let commandList = null
+  let commandFailure = 'the command batch could not be read'
   if (commandText !== null) {
     const parsed = readJson(collector, commandPath.relative, commandText)
     if (parsed.ok) {
@@ -481,7 +488,7 @@ export async function runEditorialMachine(options = {}) {
           ruleId: 'commands-not-an-array',
           message: 'The command file must hold a JSON array of commands. Newline-delimited JSON is not accepted.',
         })
-        collector.incomplete = true
+        commandFailure = 'the command file does not hold a JSON array'
       } else if (parsed.value.length > limits.maxCommands) {
         record(collector, {
           file: commandPath.relative,
@@ -489,7 +496,7 @@ export async function runEditorialMachine(options = {}) {
           message: `The batch holds ${parsed.value.length} commands, above the maxCommands limit of ${limits.maxCommands}; none of them were decided.`,
           suggestion: 'Raise --max-commands, or split the batch.',
         })
-        collector.incomplete = true
+        commandFailure = `the batch is above the maxCommands limit of ${limits.maxCommands}`
       } else {
         commandList = parsed.value
       }
@@ -507,7 +514,7 @@ export async function runEditorialMachine(options = {}) {
   } else if (!logTrusted) {
     notEvaluated(collector, 'the event log did not verify, so the current state of every document in it is unknown')
   } else if (commandList === null) {
-    notEvaluated(collector, 'the command batch could not be read')
+    notEvaluated(collector, commandFailure)
   } else if (commandList.length === 0) {
     /**
      * Green on no evidence is a defect, not a clean bill of health. A batch
