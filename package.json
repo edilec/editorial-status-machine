@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "lint": "node --check src/index.mjs && node --check src/text.mjs && node --check src/machine.mjs && node --check src/events.mjs && node --check src/commands.mjs && node --check bin/editorial-status-machine.mjs && node --check test/support.mjs && node --check test/text.test.mjs && node --check test/machine.test.mjs && node --check test/events.test.mjs && node --check test/commands.test.mjs && node --check test/machine-run.test.mjs && node --check test/limits.test.mjs && node --check test/confinement.test.mjs && node --check test/guarantees.test.mjs && node --check test/severity-table.test.mjs && node --check test/determinism.test.mjs && node --check test/cli.test.mjs",
+    "lint": "node --check src/index.mjs && node --check src/text.mjs && node --check src/machine.mjs && node --check src/events.mjs && node --check src/commands.mjs && node --check bin/editorial-status-machine.mjs && node --check test/support.mjs && node --check test/text.test.mjs && node --check test/machine.test.mjs && node --check test/events.test.mjs && node --check test/commands.test.mjs && node --check test/machine-run.test.mjs && node --check test/limits.test.mjs && node --check test/confinement.test.mjs && node --check test/guarantees.test.mjs && node --check test/severity-table.test.mjs && node --check test/determinism.test.mjs && node --check test/cli.test.mjs && node --check test/unread-inputs.test.mjs",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**",
     "example": "node bin/editorial-status-machine.mjs --root examples/clean --machine machine.json --commands commands.json --events build/editorial-events.jsonl --now 2026-03-10T12:00:00Z",

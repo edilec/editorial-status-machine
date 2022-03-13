@@ -277,12 +277,21 @@ export function createFinding(row) {
 /**
  * Read one file, reporting every way it could fail to become text.
  *
+ * `null` means "this file was not read", and it is load-bearing: the caller
+ * turns it into `logTrusted = false`, and a sentinel that answered `''`
+ * instead would make a log that was never read replay as an EMPTY log --
+ * commands already in it would be applied a second time and appended to the
+ * very file the run refused to read. So the sentinel is pinned behaviourally,
+ * in `test/unread-inputs.test.mjs`: a bounded-out and an unreadable log are
+ * driven through the real entry point and the real binary, and the status, the
+ * exit code, the counts and the bytes of the log afterwards are asserted.
+ *
  * None of these paths sets `incomplete` itself. A file that did not become
  * text leaves the machine uncompiled, the log unverified or the batch unread,
  * and every one of those ends at `notEvaluated`, which sets the flag once. A
- * second assignment here would look like defence and be untestable: no
- * mutation of it could ever change an outcome, so no test could ever fail when
- * it was removed. The invariant that actually holds -- a run that did not
+ * second assignment *of that flag* here would look like defence and be
+ * untestable: no mutation of it could change an outcome, so no test could fail
+ * when it was removed. The invariant that actually holds -- a run that did not
  * decide every command is `incomplete` -- is asserted directly instead.
  */
 async function readText(collector, file, real, limits) {
