@@ -61,6 +61,92 @@ test('maxDocuments leaves the rest of the batch undecided rather than truncating
   assert.equal(newEvents.length, 2)
 })
 
+/** Seed a log with one applied command per named document, as the CLI would. */
+async function seedDocuments(root, log, documents) {
+  await writeFile(
+    join(root, 'commands.json'),
+    JSON.stringify(documents.map((name) => command({ commandId: `seed-${name}`, document: name }))),
+    'utf8',
+  )
+  const first = await runEditorialMachine({
+    root, machine: 'machine.json', commands: 'commands.json', now: NOW, events: log,
+  })
+  assert.equal(first.report.summary.applied, documents.length)
+  await appendFile(log, eventLines(first.newEvents), 'utf8')
+}
+
+test('maxDocuments counts the documents the log already projects', async () => {
+  // The bound is on the documents this run holds state for, and the log is
+  // where most of them come from. A run whose log alone is over the bound must
+  // not report a pass about it.
+  await workspace(async ({ root, log }) => {
+    const names = ['doc-a', 'doc-b', 'doc-c', 'doc-d', 'doc-e']
+    await seedDocuments(root, log, names)
+
+    const result = await runEditorialMachine({
+      root, machine: 'machine.json', commands: 'commands.json', now: NOW, events: log,
+      limits: { maxDocuments: 2 },
+    })
+    assert.equal(result.report.status, 'incomplete')
+    assert.equal(result.report.summary.checked, 0, 'nothing may be decided against a projection left unused')
+    assert.equal(result.report.summary.applied, 0)
+    assert.equal(result.report.summary.documents, 0)
+    assert.equal(result.appendable, false)
+    assert.equal(result.newEvents.length, 0)
+    assert.deepEqual(rules(result.report).sort(), ['commands-not-evaluated', 'too-many-documents'])
+    assert.match(
+      result.report.findings.find((item) => item.ruleId === 'too-many-documents').message,
+      /log projects 5 documents, above the maxDocuments limit of 2/,
+    )
+
+    // And at the bound itself the same log is used normally.
+    const within = await runEditorialMachine({
+      root, machine: 'machine.json', commands: 'commands.json', now: NOW, events: log,
+      limits: { maxDocuments: names.length },
+    })
+    assert.equal(within.report.status, 'pass')
+    assert.equal(within.report.summary.replayed, names.length)
+    assert.equal(within.report.summary.documents, names.length)
+  }, { commands: TO_PUBLISHED })
+})
+
+test('a document the log projects fills the bound for the batch that follows', async () => {
+  // The batch-side counter starts from the log's documents. Starting it empty
+  // would let a run holding maxDocuments documents already accept a command
+  // opening one more, and report a pass.
+  await workspace(async ({ root, log }) => {
+    await seedDocuments(root, log, ['doc-a', 'doc-b'])
+    await writeFile(
+      join(root, 'commands.json'),
+      JSON.stringify([command({ commandId: 'c-new', document: 'doc-c' })]),
+      'utf8',
+    )
+
+    const result = await runEditorialMachine({
+      root, machine: 'machine.json', commands: 'commands.json', now: NOW, events: log,
+      limits: { maxDocuments: 2 },
+    })
+    assert.equal(result.report.status, 'incomplete')
+    assert.equal(result.report.summary.applied, 0, 'the new document must not be opened past the bound')
+    assert.equal(result.report.summary.checked, 0)
+    assert.equal(result.newEvents.length, 0)
+    assert.ok(rules(result.report).includes('too-many-documents'), rules(result.report).join(','))
+    assert.match(
+      result.report.findings.find((item) => item.ruleId === 'too-many-documents').message,
+      /document number 3, above the maxDocuments limit of 2/,
+    )
+
+    // One more room and the same command is applied, so the bound is what
+    // refused it and nothing else.
+    const roomier = await runEditorialMachine({
+      root, machine: 'machine.json', commands: 'commands.json', now: NOW, events: log,
+      limits: { maxDocuments: 3 },
+    })
+    assert.equal(roomier.report.status, 'pass')
+    assert.equal(roomier.report.summary.applied, 1)
+  }, { commands: TO_PUBLISHED })
+})
+
 test('maxFileBytes refuses to read an oversized input', async () => {
   const report = (await run(TO_PUBLISHED, { limits: { maxFileBytes: 40 } })).report
   assert.equal(report.status, 'incomplete')

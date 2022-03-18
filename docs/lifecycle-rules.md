@@ -210,6 +210,13 @@ A log that does not exist yet is an empty log, not missing evidence — the firs
 lifecycle has nothing to replay. A log that exists and cannot be read is the opposite, and is
 reported as `input-unreadable`.
 
+The documents a verified log projects count against `maxDocuments`, because they are the state
+this run holds. A log already above the bound is reported as `too-many-documents`, is not used,
+and leaves the batch undecided — counting only the documents a command in the batch names would
+leave the bound unenforced against the larger half of the projection while the report still
+claimed the run was complete. The batch's own counter starts from the log's documents, so a run
+that already holds `maxDocuments` of them refuses to open one more.
+
 ## Report
 
 ```json
@@ -334,7 +341,7 @@ last-wins.
 | `timestamp-invalid` | error | An instant is not ISO-8601 UTC, or names a date that does not exist. |
 | `too-many-actors` | error | The registry is above `maxActors`; the machine was not compiled. |
 | `too-many-commands` | error | The batch is above `maxCommands`; no command was decided. |
-| `too-many-documents` | error | The run reached `maxDocuments`; the rest of the batch was left undecided. |
+| `too-many-documents` | error | `maxDocuments` was reached — by the log's projection, or by the batch; nothing past it was decided. |
 | `too-many-events` | error | The log is above `maxEvents`; it was not replayed. |
 | `too-many-states` | error | The machine is above `maxStates`; it was not compiled. |
 | `too-many-transitions` | error | The machine is above `maxTransitions`; it was not compiled. |

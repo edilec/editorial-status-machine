@@ -436,6 +436,7 @@ export async function runEditorialMachine(options = {}) {
   let documents = new Map()
   let byCommandId = new Map()
   let logTrusted = true
+  let logRefusal = 'the event log did not verify, so the current state of every document in it is unknown'
   if (eventLogPath !== null && machine !== null) {
     // A log that does not exist yet is an empty log, not missing evidence: the
     // first run of a new lifecycle has nothing to replay. A log that exists and
@@ -480,6 +481,25 @@ export async function runEditorialMachine(options = {}) {
       // second assignment here would be a guarantee no test could ever kill --
       // comfort rather than defence.
       logTrusted = replayed.trusted
+      /**
+       * `maxDocuments` bounds the documents this run holds state for, and the
+       * log is where most of them come from. Counting only the ones a command
+       * names would leave the documented bound unenforced against the larger
+       * half of the projection -- a limit that reports nothing while being
+       * exceeded is worse than no limit, because the report says the run was
+       * complete.
+       */
+      if (logTrusted && replayed.documents.size > limits.maxDocuments) {
+        record(collector, {
+          file: EVENT_LOG_LABEL,
+          pointer: '/events',
+          ruleId: 'too-many-documents',
+          message: `The log projects ${replayed.documents.size} documents, above the maxDocuments limit of ${limits.maxDocuments}; it was not used and no command was decided against it.`,
+          suggestion: 'Raise --max-documents, or split the lifecycle across separate logs.',
+        })
+        logTrusted = false
+        logRefusal = `the log projects more documents than the maxDocuments limit of ${limits.maxDocuments} allows`
+      }
       if (logTrusted) {
         priorEvents = replayed.events
         documents = replayed.documents
@@ -527,7 +547,7 @@ export async function runEditorialMachine(options = {}) {
   if (machine === null) {
     notEvaluated(collector, 'the machine definition could not be compiled')
   } else if (!logTrusted) {
-    notEvaluated(collector, 'the event log did not verify, so the current state of every document in it is unknown')
+    notEvaluated(collector, logRefusal)
   } else if (commandList === null) {
     notEvaluated(collector, commandFailure)
   } else if (commandList.length === 0) {

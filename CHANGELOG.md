@@ -46,7 +46,10 @@ All notable changes to this project are documented in this file.
   cannot put the log back among the inputs;
 - explicit file-byte, command, event, document, state, transition and actor
   limits, each reported by name when hit and each making the run `incomplete`
-  instead of truncating;
+  instead of truncating. `maxDocuments` counts the documents a verified log
+  projects as well as the ones the batch names: a log already above the bound
+  is reported and left unused rather than quietly exceeding the limit while the
+  report claims a complete run;
 - sanitisation of every untrusted string that reaches output — identifiers,
   paths, pointers and messages as well as `evidence` — so an id containing a
   line terminator cannot forge a line in the human report;
