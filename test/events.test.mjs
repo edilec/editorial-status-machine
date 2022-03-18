@@ -158,6 +158,30 @@ test('a log recording a transition the machine no longer declares is refused', (
   assert.ok(result.problems.some((item) => item.ruleId === 'event-state-unknown'))
 })
 
+test('a log line whose destination contradicts the machine is refused', () => {
+  // Both states are declared, the chain is recomputed and verifies, the action
+  // exists from that state: the ONLY thing wrong is where the machine says the
+  // action leads. Dropping the destination half of this check lets anyone who
+  // can write the log project a document into any state -- `published`
+  // included -- and the tool then judges commands against that forged state.
+  const [line] = log(THREE_STEPS).trimEnd().split('\n')
+  const forged = JSON.parse(line)
+  assert.deepEqual([forged.from, forged.action, forged.to], ['draft', 'submit', 'review'])
+  forged.to = 'published'
+  forged.hash = eventHash(GENESIS_HASH, forged)
+
+  const result = replay(`${JSON.stringify(forged)}\n`)
+  assert.equal(result.trusted, false)
+  assert.deepEqual(result.problems.map((item) => item.ruleId), ['event-transition-unknown'])
+  assert.equal(result.problems[0].evidence, 'draft --submit--> published')
+  assert.equal(result.documents.size, 0, 'nothing may be projected from a line the machine contradicts')
+  assert.equal(result.events.length, 0)
+  // The chain itself is intact: the hash was recomputed over the forged body,
+  // so nothing but the machine disagreement can be responsible for the refusal.
+  assert.equal(result.problems.some((item) => item.ruleId === 'event-chain-broken'), false)
+  assert.equal(result.problems.some((item) => item.ruleId === 'event-state-unknown'), false)
+})
+
 test('a log whose replay disagrees with an event’s "from" is refused', () => {
   // A log built for a different document history: seq 2 starts from review,
   // but nothing put this document there.

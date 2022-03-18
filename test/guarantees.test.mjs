@@ -5,7 +5,10 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
-import { EXCERPT_LIMIT, createFinding, formatReport, runEditorialMachine } from '../src/index.mjs'
+import {
+  EXCERPT_LIMIT, GENESIS_HASH, commandHash, createFinding, eventHash, formatReport,
+  runEditorialMachine, serializeEvent,
+} from '../src/index.mjs'
 import { CLI, MACHINE, NOW, TO_PUBLISHED, command, projectDirectory, workspace } from './support.mjs'
 
 const run = promisify(execFile)
@@ -284,6 +287,79 @@ test('the CLI appends nothing to a log whose chain does not verify', async () =>
     assert.equal(await readFile(log, 'utf8'), broken, 'a log that did not verify must not be extended')
     assert.equal(JSON.parse(second.stdout).status, 'incomplete')
   }, { commands: TO_PUBLISHED })
+})
+
+/**
+ * One hand-built log line, sealed with a correctly recomputed chain hash, that
+ * claims `submit` moved the document from `draft` straight to `published`.
+ *
+ * Everything about it verifies except the one thing the machine decides: where
+ * the action leads. Whoever can write the log can recompute the chain, so the
+ * hash is not what stops this -- the agreement check between the recorded
+ * destination and the declared one is.
+ */
+function forgedPublishedLog() {
+  const body = {
+    seq: 1,
+    commandId: 'forged-1',
+    document: 'post',
+    action: 'submit',
+    from: 'draft',
+    to: 'published',
+    actor: 'alice',
+    at: '2026-03-01T09:00:00.000Z',
+    revision: 1,
+    scheduledFor: null,
+    commandHash: commandHash({
+      document: 'post', action: 'submit', actor: 'alice',
+      at: '2026-03-01T09:00:00.000Z', expectedRevision: 0, scheduledFor: null,
+    }),
+  }
+  return `${serializeEvent({ ...body, hash: eventHash(GENESIS_HASH, body) })}\n`
+}
+
+test('a log that contradicts the machine about a destination cannot forge a state', async () => {
+  // `retire` is legal only from `published`. The log claims the document is
+  // there; the machine says `submit` leads to `review`. If the destination
+  // disagreement were not caught, this batch would be decided against the
+  // forged state and reported as a pass.
+  const retire = command({
+    commandId: 'c-retire', document: 'post', action: 'retire', actor: 'dana',
+    at: '2026-03-05T09:00:00Z', expectedRevision: 1,
+  })
+  const { report, newEvents, appendable, documents } = await decide([retire], {
+    mutate: ({ log }) => writeFile(log, forgedPublishedLog(), 'utf8'),
+  })
+
+  assert.equal(report.status, 'incomplete')
+  assert.ok(rules(report).includes('event-transition-unknown'), rules(report).join(','))
+  assert.equal(report.summary.checked, 0, 'no command may be decided against a log the machine contradicts')
+  assert.equal(report.summary.applied, 0)
+  assert.equal(newEvents.length, 0)
+  assert.equal(appendable, false)
+  assert.deepEqual(documents, [], 'the forged projection must not reach the report')
+})
+
+test('the CLI refuses the forged log with exit 2 and appends nothing to it', async () => {
+  await workspace(async ({ root, log }) => {
+    const forged = forgedPublishedLog()
+    await writeFile(log, forged, 'utf8')
+    const result = await cli([
+      '--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+      '--now', NOW, '--events', log, '--json',
+    ])
+    assert.equal(result.code, 2)
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.applied, 0)
+    assert.equal(await readFile(log, 'utf8'), forged, 'a log the machine contradicts must not be extended')
+    assert.equal(result.stdout.includes('retired'), false)
+  }, {
+    commands: [command({
+      commandId: 'c-retire', document: 'post', action: 'retire', actor: 'dana',
+      at: '2026-03-05T09:00:00Z', expectedRevision: 1,
+    })],
+  })
 })
 
 test('the CLI appends nothing when every command is refused', async () => {
