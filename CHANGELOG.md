@@ -57,7 +57,12 @@ All notable changes to this project are documented in this file.
   flags, the report on stdout, diagnostics on stderr, and exit codes 0 / 1 / 2
   — with an empty stdout for a configuration error and an `incomplete` report
   for evidence that could not be obtained, and with a repeated value-carrying
-  flag refused instead of silently overwriting the earlier value;
+  flag refused instead of silently overwriting the earlier value. An input that
+  was named but is not there is evidence missing rather than configuration: it
+  is confined like any other path, reported as `input-unreadable` against its
+  root-relative name, and answered with an `incomplete` report on stdout. A
+  path whose entry exists but does not resolve — a dangling symbolic link — is
+  refused unresolved instead, for an input and for the log destination alike;
 - runnable clean and deliberately broken example batches; the clean batch ends
   by repeating an applied publish command, so idempotency is demonstrated by
   the example itself, and the broken batch spreads fifteen refusals over nine

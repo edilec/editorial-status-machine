@@ -174,14 +174,96 @@ test('the log destination must be a file, and must have somewhere to live', asyn
   })
 })
 
-test('a missing input is a configuration error, with nothing to report about', async () => {
+test('an input named but absent is missing evidence, not a run with no subject', async () => {
+  // The run has a subject -- a root, and the other declared inputs -- and one
+  // piece of evidence about it was not obtained. That is what `incomplete`
+  // says, and a consumer piping stdout gets a report it can parse rather than
+  // nothing at all.
+  await sandbox(async (base) => {
+    const root = join(base, 'root')
+    await seed(root)
+
+    for (const [label, options] of [
+      ['--machine', { machine: 'absent.json', commands: 'commands.json' }],
+      ['--commands', { machine: 'machine.json', commands: 'absent.json' }],
+    ]) {
+      const { report, appendable, newEvents } = await runEditorialMachine({ root, ...options, now: NOW })
+      assert.equal(report.status, 'incomplete', label)
+      assert.equal(report.summary.checked, 0, label)
+      assert.equal(newEvents.length, 0, label)
+      // A machine that was never read cannot judge anything, so appending is
+      // refused after one; an unread command batch leaves nothing to append
+      // but says nothing against the log.
+      assert.equal(appendable, label === '--commands', label)
+
+      // Exactly these two: a file that was never read must not also be
+      // reported as empty JSON, empty text or an empty batch.
+      assert.deepEqual(
+        report.findings.map((item) => item.ruleId).sort(),
+        ['commands-not-evaluated', 'input-unreadable'],
+        label,
+      )
+      const unreadable = report.findings.filter((item) => item.ruleId === 'input-unreadable')
+      assert.equal(unreadable[0].location.file, 'absent.json', label)
+      assert.match(unreadable[0].message, /ENOENT/, label)
+      for (const finding of report.findings) {
+        assert.equal(finding.location.file.startsWith('/'), false, finding.location.file)
+        assert.equal(JSON.stringify(finding).includes(base), false)
+      }
+    }
+  })
+})
+
+test('an absent input is still confined: outside the root it is refused unread', async () => {
+  // Confinement cannot rest on the file existing. A path that is not there yet
+  // is resolved as far as it does exist and checked the same way.
   await sandbox(async (base) => {
     const root = join(base, 'root')
     await seed(root)
     await assert.rejects(
-      runEditorialMachine({ root, machine: 'absent.json', commands: 'commands.json', now: NOW }),
-      /--machine could not be resolved: ENOENT/,
+      resolveInput(root, '../absent.json', '--commands'),
+      /--commands resolves outside the input root/,
     )
+    await assert.rejects(
+      runEditorialMachine({ root, machine: 'machine.json', commands: '../absent.json', now: NOW }),
+      /resolves outside the input root/,
+    )
+    const inside = await resolveInput(root, 'absent.json', '--commands')
+    assert.equal(inside.relative, 'absent.json')
+    assert.equal(inside.real, join(root, 'absent.json'))
+  })
+})
+
+test('a dangling symlink is refused unresolved, not treated as an absent file', async () => {
+  // The entry exists; only its target does not. Treating it as "absent" would
+  // hand back a path that the next open follows straight out of the tree as
+  // soon as the target appears -- and, for the log, one that would be written
+  // through the link into the read-only root.
+  await sandbox(async (base) => {
+    const root = join(base, 'root')
+    await seed(root)
+    await symlink(join(base, 'outside', 'gone.json'), join(root, 'dangling.json'))
+    await symlink(join(root, 'planted.jsonl'), join(base, 'dangling-log.jsonl'))
+
+    await assert.rejects(
+      resolveInput(root, 'dangling.json', '--commands'),
+      /--commands is a symbolic link with no target/,
+    )
+    await assert.rejects(
+      runEditorialMachine({ root, machine: 'machine.json', commands: 'dangling.json', now: NOW }),
+      /symbolic link with no target/,
+    )
+    await assert.rejects(
+      resolveEventLog(root, join(base, 'dangling-log.jsonl')),
+      /Event log destination is a symbolic link with no target/,
+    )
+  })
+})
+
+test('a root that is missing, or is not a directory, is a configuration error', async () => {
+  await sandbox(async (base) => {
+    const root = join(base, 'root')
+    await seed(root)
     await assert.rejects(
       runEditorialMachine({ root: join(base, 'absent'), machine: 'm.json', commands: 'c.json', now: NOW }),
       /Input root could not be read: ENOENT/,

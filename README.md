@@ -94,6 +94,10 @@ byte-identical stdout.
 | `2` | invalid usage or configuration | **empty** |
 | `2` | evidence missing, undecodable or bounded out | an `incomplete` report |
 
+An input that was named but is not there is evidence missing, not a configuration error: it is
+reported as `input-unreadable` in an `incomplete` report. stdout is empty only when the run never
+had a subject at all — an unusable flag, an unreadable root, a path outside it.
+
 stdout carries the report and nothing else; diagnostics go to stderr. A consumer that pipes stdout
 must handle it being empty on exit 2 — emitting a fake report for a run that never started would
 be worse.

@@ -23,7 +23,7 @@
  *    status is `incomplete`.
  */
 
-import { readFile, realpath, stat } from 'node:fs/promises'
+import { lstat, readFile, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 
 import { evaluateCommand, validateCommand } from './commands.mjs'
@@ -169,17 +169,64 @@ export function isInside(root, candidate) {
   return candidate.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)
 }
 
-/** Resolve one declared input and refuse anything that is not really inside the root. */
+const ANCESTOR_PROBE_LIMIT = 64
+
+/**
+ * The real path of something that may not exist yet.
+ *
+ * Both the declared inputs and the log destination need this: an input the run
+ * was told to read may be absent, and the log usually does not exist at all on
+ * a first run. The nearest existing ancestor is resolved and the remaining
+ * segments are appended to it, so a symlinked parent directory is still
+ * defeated -- that is how a destination "outside the tree" quietly becomes a
+ * file written into the inputs the same run is reading.
+ *
+ * A path whose own entry exists but does not resolve is a dangling symbolic
+ * link, not a missing file, and it is refused rather than treated as absent:
+ * handing back the lexical path would hand back one that a later open follows
+ * straight out of the tree the moment the link's target appears.
+ */
+async function resolveNearest(absolute, label) {
+  const tail = []
+  let probe = absolute
+
+  for (let step = 0; step < ANCESTOR_PROBE_LIMIT; step += 1) {
+    let real
+    try {
+      real = await realpath(probe)
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
+        throw new TypeError(`${label} could not be resolved: ${error.code ?? 'unknown error'}`)
+      }
+      if (await lstat(probe).then(() => true, () => false)) {
+        throw new TypeError(`${label} is a symbolic link with no target and was refused unresolved`)
+      }
+      const parent = dirname(probe)
+      if (parent === probe) throw new TypeError(`${label} has no existing ancestor directory`)
+      tail.unshift(basename(probe))
+      probe = parent
+      continue
+    }
+    return { real: tail.length === 0 ? real : join(real, ...tail), missing: tail.length > 0 }
+  }
+  throw new TypeError(`${label} is nested too deeply to resolve`)
+}
+
+/**
+ * Resolve one declared input and refuse anything that is not really inside the root.
+ *
+ * An input that is named but absent is resolved as far as it does exist and
+ * confined like any other. It is *not* a configuration error: the run has a
+ * subject -- a root, a machine, a batch -- and one piece of evidence about it
+ * could not be obtained, which is what `incomplete` exists to say. `readText`
+ * reports it as `input-unreadable` and the run ends at exit 2 with a report on
+ * stdout, rather than exit 2 with nothing for a consumer to parse.
+ */
 export async function resolveInput(rootReal, relativePath, label) {
   if (typeof relativePath !== 'string' || relativePath.trim() === '') {
     throw new TypeError(`${label} must be a non-empty path`)
   }
-  let real
-  try {
-    real = await realpath(resolve(rootReal, relativePath))
-  } catch (error) {
-    throw new TypeError(`${label} could not be resolved: ${error.code ?? 'unknown error'}`)
-  }
+  const { real } = await resolveNearest(resolve(rootReal, relativePath), label)
   if (!isInside(rootReal, real)) {
     throw new TypeError(`${label} resolves outside the input root and was refused unread`)
   }
@@ -187,49 +234,18 @@ export async function resolveInput(rootReal, relativePath, label) {
   return { real, relative: relative.split(sep).join('/') }
 }
 
-const ANCESTOR_PROBE_LIMIT = 64
-
-/**
- * Resolve the event log destination and refuse anything inside the input root.
- *
- * The log usually does not exist on a first run, so the nearest existing
- * ancestor is resolved and the remaining segments are appended to it. That
- * still defeats a symlinked parent directory, which is how a destination
- * "outside the tree" quietly becomes a file written into the inputs the same
- * run is reading.
- */
+/** Resolve the event log destination and refuse anything inside the input root. */
 export async function resolveEventLog(rootReal, destination) {
   if (typeof destination !== 'string' || destination.trim() === '') {
     throw new TypeError('Event log destination must be a non-empty path')
   }
-  const absolute = resolve(destination)
-  const tail = []
-  let probe = absolute
-  let realBase = null
-
-  for (let step = 0; step < ANCESTOR_PROBE_LIMIT; step += 1) {
-    try {
-      realBase = await realpath(probe)
-      break
-    } catch (error) {
-      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
-        throw new TypeError(`Event log destination could not be resolved: ${error.code ?? 'unknown error'}`)
-      }
-      const parent = dirname(probe)
-      if (parent === probe) throw new TypeError('Event log destination has no existing ancestor directory')
-      tail.unshift(basename(probe))
-      probe = parent
-    }
-  }
-  if (realBase === null) throw new TypeError('Event log destination is nested too deeply to resolve')
-
-  const resolved = tail.length === 0 ? realBase : join(realBase, ...tail)
+  const { real: resolved, missing } = await resolveNearest(resolve(destination), 'Event log destination')
   if (isInside(rootReal, resolved)) {
     throw new TypeError(
       'Event log destination is inside the input root; the log is written to and the root is read-only, so it must live elsewhere',
     )
   }
-  if (tail.length === 0) {
+  if (!missing) {
     // A destination that exists must be a regular file. A directory is the
     // obvious mistake; a FIFO or a device node is the one that would hang the
     // append forever instead of failing.

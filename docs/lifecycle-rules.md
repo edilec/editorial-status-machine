@@ -20,6 +20,13 @@ Three inputs and one output:
   inside the root resolves out of the tree without ever spelling a traversal — and comparing a
   real root against a merely-resolved target is the opposite mistake, which refuses files that
   are genuinely inside a root reached through a symlink.
+- A path that does not exist — an input that is simply absent, or a log destination on a first
+  run — is resolved as far as it does exist: the nearest existing ancestor is resolved and the
+  remaining segments appended. It is then confined exactly like any other path, so an absent
+  file outside the root is still refused unread. A path whose own entry exists but does not
+  resolve is a **dangling symbolic link**, not an absent file, and is refused unresolved:
+  treating it as absent would hand back a path that the next open follows out of the tree the
+  moment the link's target appears.
 - The event log is written to and the root is read-only, so a log destination inside the root is
   refused. The nearest existing ancestor of the destination is resolved before the check, so a
   symlinked parent directory cannot put the log back inside the inputs.
@@ -260,9 +267,16 @@ line in a human report.
 | `2` | invalid usage or configuration | **empty** |
 | `2` | evidence missing, undecodable or bounded out | an `incomplete` report |
 
-A configuration error means the run never had a subject, so there is nothing to report about. An
-unreadable input means the run had a subject and failed to obtain evidence about it, which is
-exactly what `incomplete` exists to say.
+A configuration error means the run never had a subject, so there is nothing to report about: an
+unknown or repeated flag, a missing required one, an unusable `--now`, a root that cannot be read
+or is not a directory, a path that resolves outside the root, a log destination inside it.
+
+Everything else on exit 2 had a subject and failed to obtain evidence about it, which is exactly
+what `incomplete` exists to say — and that includes an input that was **named but is not there**.
+A machine file or a command file that does not exist is reported as `input-unreadable` against its
+path relative to the root, in an `incomplete` report on stdout. A missing file is the commonest
+shape of missing evidence, and answering it with an empty stdout would leave a consumer that pipes
+the report nothing to parse in the one case it most needs to distinguish.
 
 ## Limits
 
@@ -316,7 +330,7 @@ last-wins.
 | `input-not-json` | error | An input file is not valid JSON. |
 | `input-not-utf8` | error | An input file is not valid UTF-8; nothing was read from it. |
 | `input-too-large` | error | An input file is above `maxFileBytes`; it was not read. |
-| `input-unreadable` | error | An input file could not be opened, or is not a regular file. |
+| `input-unreadable` | error | An input file is absent, could not be opened, or is not a regular file. |
 | `machine-actor-duplicate` | error | An actor id is declared twice, so which roles apply is ambiguous. |
 | `machine-duplicate-entry` | warning | A role or list entry is repeated; the repeat was ignored. |
 | `machine-field-invalid` | error | A machine field has the wrong type or is absent. |

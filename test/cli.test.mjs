@@ -147,6 +147,34 @@ test('an unreadable input yields exit 2 with an incomplete report on stdout', as
   }, { commands: TO_PUBLISHED })
 })
 
+test('an input named but absent yields exit 2 with an incomplete report on stdout', async () => {
+  // The two shapes of exit 2, told apart: a file that is simply not there is
+  // evidence the run failed to obtain, so stdout carries a report a consumer
+  // can parse. A flag that makes no sense leaves the run with no subject at
+  // all, and stdout stays empty.
+  await workspace(async ({ root }) => {
+    const missing = await cli([
+      '--root', root, '--machine', 'absent.json', '--commands', 'commands.json',
+      '--now', NOW, '--json',
+    ])
+    assert.equal(missing.code, 2)
+    const report = JSON.parse(missing.stdout)
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.checked, 0)
+    const unreadable = report.findings.filter((item) => item.ruleId === 'input-unreadable')
+    assert.equal(unreadable.length, 1)
+    assert.equal(unreadable[0].location.file, 'absent.json')
+    assert.match(missing.stderr, /incomplete: 0 of 3 command\(s\) were decided/)
+
+    const configuration = await cli([
+      '--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+      '--now', 'whenever', '--json',
+    ])
+    assert.equal(configuration.code, 2)
+    assert.equal(configuration.stdout, '', 'a run with no subject has nothing to report')
+  }, { commands: TO_PUBLISHED })
+})
+
 test('a log destination inside the input root is refused before anything is read', async () => {
   const result = await cli([...CLEAN, '--now', NOW, '--events', 'examples/clean/events.jsonl'])
   assert.equal(result.code, 2)
