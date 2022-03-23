@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 
 import { isInside, resolveEventLog, resolveInput, runEditorialMachine } from '../src/index.mjs'
@@ -127,6 +127,67 @@ test('a finding never carries an absolute host path', async () => {
       assert.equal(finding.location.file.includes(base), false)
       assert.equal(JSON.stringify(finding).includes(base), false)
     }
+  })
+})
+
+test('a log finding never carries the log\u2019s host path either', async () => {
+  /**
+   * The log is the one finding that could leak an absolute path: it lives
+   * outside the root on purpose, so it has no relative path there and is
+   * reported under a fixed logical name instead. The test that covered "a
+   * finding never carries an absolute host path" ran without --events at all,
+   * so every log-finding construction site could have been changed to emit the
+   * resolved path with the suite still green.
+   *
+   * Each case below reaches a different one of those sites.
+   */
+  await sandbox(async (base) => {
+    const root = join(base, 'root')
+    await seed(root)
+    const log = join(base, 'secret-place', 'editorial-events.jsonl')
+    await mkdir(dirname(log), { recursive: true })
+
+    const cases = [
+      ['a line that is not JSON', async () => {
+        await writeFile(log, 'not json\n', 'utf8')
+        return {}
+      }, 'event-line-invalid'],
+      ['a log that is not UTF-8', async () => {
+        await writeFile(log, Buffer.from([0x7b, 0xff, 0x7d]))
+        return {}
+      }, 'input-not-utf8'],
+      ['a log above maxFileBytes', async () => {
+        // Large enough that the bound below touches the log and nothing else:
+        // both declared inputs are a few hundred bytes.
+        await writeFile(log, `${'x'.repeat(65536)}\n`, 'utf8')
+        return { limits: { maxFileBytes: 8192 } }
+      }, 'input-too-large'],
+    ]
+
+    for (const [label, prepare, ruleId] of cases) {
+      const extra = await prepare()
+      const { report } = await runEditorialMachine({
+        root, machine: 'machine.json', commands: 'commands.json', now: NOW, events: log, ...extra,
+      })
+      assert.equal(report.status, 'incomplete', label)
+      const logFindings = report.findings.filter((item) => item.ruleId === ruleId)
+      assert.equal(logFindings.length, 1, `${label}: ${report.findings.map((item) => item.ruleId).join(',')}`)
+      assert.equal(logFindings[0].location.file, 'event-log', label)
+      for (const finding of report.findings) {
+        assert.equal(finding.location.file.startsWith('/'), false, `${label}: ${finding.location.file}`)
+        assert.equal(JSON.stringify(finding).includes('secret-place'), false, label)
+        assert.equal(JSON.stringify(finding).includes(base), false, label)
+      }
+    }
+
+    /**
+     * The third construction site -- the one that reports a log which exists
+     * but cannot be inspected -- is not reachable from here: `resolveEventLog`
+     * has already resolved and stat'd the destination, so anything but ENOENT
+     * has been refused before the run starts. It is kept because the
+     * alternative, treating an uninspectable log as an empty one, is the defect
+     * `test/unread-inputs.test.mjs` exists to prevent.
+     */
   })
 })
 

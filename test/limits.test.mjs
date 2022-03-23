@@ -94,10 +94,15 @@ test('maxDocuments counts the documents the log already projects', async () => {
     assert.equal(result.appendable, false)
     assert.equal(result.newEvents.length, 0)
     assert.deepEqual(rules(result.report).sort(), ['commands-not-evaluated', 'too-many-documents'])
-    assert.match(
-      result.report.findings.find((item) => item.ruleId === 'too-many-documents').message,
-      /log projects 5 documents, above the maxDocuments limit of 2/,
-    )
+    const bound = result.report.findings.find((item) => item.ruleId === 'too-many-documents')
+    assert.match(bound.message, /log projects 5 documents, above the maxDocuments limit of 2/)
+    // The log lives outside the root and has no relative path there, so it is
+    // reported under its logical name and never as a host path.
+    assert.equal(bound.location.file, 'event-log')
+    for (const finding of result.report.findings) {
+      assert.equal(finding.location.file.startsWith('/'), false, finding.location.file)
+      assert.equal(JSON.stringify(finding).includes(log), false)
+    }
 
     // And at the bound itself the same log is used normally.
     const within = await runEditorialMachine({
