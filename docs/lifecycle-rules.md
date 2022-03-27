@@ -320,6 +320,21 @@ last-wins.
 
 ## Rule catalog
 
+Severity is where a run's verdict comes from, so it is asserted three ways that share no source:
+this table against the frozen `RULE_SEVERITY` in both directions, a rule-by-rule copy written out
+by hand in the suite, and — for every rule that can decide whether a run passes — the behaviour
+itself. Each of those rules has a case that drives a real batch through the real binary and asserts
+the rule reported, the resulting `fail`, and exit 1; the rules that must *not* fail a run
+(`command-replayed`, the machine shape warnings) have cases asserting `pass` and exit 0. Three
+agreeing declarations can be edited together and still agree; an exit code cannot.
+
+The error rules that cannot be pinned that way are the ones that never decide a verdict on their
+own: `machine-*`, `event-*`, `input-*`, `commands-not-an-array` and the `too-many-*` bounds all
+leave the run `incomplete` because evidence was not obtained, whatever severity they carry. For the
+machine ones a further invariant holds — every *fatal* compilation problem carries a rule this
+table marks as an error, because a fatal problem that only warned would abandon the run while
+reporting nothing that fails it.
+
 | Rule | Severity | Meaning |
 | --- | --- | --- |
 | `action-unknown` | error | The action is not declared by any transition in the machine. |

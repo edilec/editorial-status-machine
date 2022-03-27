@@ -91,7 +91,11 @@ All notable changes to this project are documented in this file.
 - Every finding takes its severity from one frozen `ruleId -> severity` table;
   an unknown rule id throws, the table is asserted against the documented
   catalog in both directions, and every severity is additionally pinned rule by
-  rule, so downgrading a rule in both the table and the catalog is still caught.
+  rule. Those are three declarations, and a coordinated edit to all three
+  agrees with itself, so every rule whose severity can decide a verdict is also
+  pinned by behaviour: a real batch through the real binary, asserting the rule
+  reported, the status and the exit code, with nothing in those tests reading
+  the table.
 - No wall clock, locale, `localeCompare`, random source, network access or
   filesystem enumeration order affects the output.
 

@@ -118,7 +118,10 @@ Each of these has a test that fails when the line enforcing it is removed.
   chain bury the break.
 - **The log is append-only.** No code path in this package rewrites, reorders or removes an event.
 - **Every finding's severity comes from one frozen table**, asserted against the documented catalog
-  in both directions and pinned again rule by rule.
+  in both directions and pinned again rule by rule — and, for every rule that decides whether a run
+  passes, pinned by behaviour: a real batch through the real binary, asserting the rule reported,
+  the status and the exit code. Three agreeing declarations can be edited together; an outcome
+  cannot.
 - **Paths are confined on real paths, both sides.** A symlink out of the root is refused; a
   legitimate file reached through a symlinked root is not.
 - **No wall clock, locale, `localeCompare`, random source, network access or filesystem
