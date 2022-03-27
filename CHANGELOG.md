@@ -51,8 +51,14 @@ All notable changes to this project are documented in this file.
   is reported and left unused rather than quietly exceeding the limit while the
   report claims a complete run;
 - sanitisation of every untrusted string that reaches output — identifiers,
-  paths, pointers and messages as well as `evidence` — so an id containing a
-  line terminator cannot forge a line in the human report;
+  paths, pointers and messages as well as `evidence`, and an unknown CLI option
+  on its way to stderr — covering C0 and DEL, the whole C1 range (U+0085 NEL
+  forges a line of its own, U+009B is the 8-bit CSI), U+2028 and U+2029, and
+  the bidi and isolate controls U+200E, U+200F, U+202A–U+202E and
+  U+2066–U+2069, which are also refused inside an identifier. An id carrying
+  U+202E printed as a reversal of the value that was compared, stored and
+  hashed; ordinary right-to-left letters are untouched, since they carry their
+  own direction and need no override;
 - a CLI with `--help`, `--json`, `--dry-run`, the required `--now` and the limit
   flags, the report on stdout, diagnostics on stderr, and exit codes 0 / 1 / 2
   — with an empty stdout for a configuration error and an `incomplete` report
@@ -69,7 +75,9 @@ All notable changes to this project are documented in this file.
   documents;
 - the rule catalog, machine and command schemas, log format, ordering rule,
   limits, exit codes and the list of things this tool cannot conclude in
-  `docs/lifecycle-rules.md`.
+  `docs/lifecycle-rules.md`;
+- `commands-not-evaluated` reported against the command file that was actually
+  named, rather than against a hardcoded `commands.json` that need not exist.
 
 ### Guaranteed
 

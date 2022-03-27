@@ -368,9 +368,15 @@ function readJson(collector, file, text) {
   }
 }
 
-function notEvaluated(collector, reason) {
+/**
+ * The batch nobody decided, reported against the batch that was actually
+ * named. A hardcoded `commands.json` here pointed at a file that need not
+ * exist: every other finding carries the real root-relative path, and a
+ * location a reader cannot open is worse than no location.
+ */
+function notEvaluated(collector, file, reason) {
   record(collector, {
-    file: 'commands.json',
+    file,
     ruleId: 'commands-not-evaluated',
     message: `No command was decided: ${reason}. A command judged against evidence this run could not obtain would not have been judged at all.`,
   })
@@ -561,11 +567,11 @@ export async function runEditorialMachine(options = {}) {
   let rejected = 0
 
   if (machine === null) {
-    notEvaluated(collector, 'the machine definition could not be compiled')
+    notEvaluated(collector, commandPath.relative, 'the machine definition could not be compiled')
   } else if (!logTrusted) {
-    notEvaluated(collector, logRefusal)
+    notEvaluated(collector, commandPath.relative, logRefusal)
   } else if (commandList === null) {
-    notEvaluated(collector, commandFailure)
+    notEvaluated(collector, commandPath.relative, commandFailure)
   } else if (commandList.length === 0) {
     /**
      * Green on no evidence is a defect, not a clean bill of health. A batch

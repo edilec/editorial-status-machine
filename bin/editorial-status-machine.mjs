@@ -3,7 +3,7 @@
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import { eventLines, formatReport, runEditorialMachine } from '../src/index.mjs'
+import { eventLines, excerpt, formatReport, runEditorialMachine } from '../src/index.mjs'
 
 const HELP = `editorial-status-machine
 
@@ -112,7 +112,9 @@ function parseArguments(argv) {
       const raw = takeValue(argument)
       if (!/^\d+$/.test(raw) || Number(raw) < 1) throw new Error(`${argument} requires a positive integer`)
       options.limits[LIMIT_FLAGS.get(argument)] = Number(raw)
-    } else throw new Error(`Unknown option "${argument}"`)
+    // argv is the one untrusted string that reaches a stream without passing
+    // through a finding, so it is flattened the same way one would be.
+    } else throw new Error(`Unknown option "${excerpt(argument, 60)}"`)
   }
 
   for (const [flag, key] of [['--root', 'root'], ['--machine', 'machine'], ['--commands', 'commands'], ['--now', 'now']]) {

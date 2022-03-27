@@ -36,9 +36,10 @@ Three inputs and one output:
 - The log is opened for **append**. There is no code path in this tool that rewrites, reorders or
   removes an event, and none that edits a machine or a command file.
 
-`location.file` in a finding is the input's path relative to `--root`. The event log has no
-relative path there, so its findings are reported under the fixed logical name `event-log`: a
-finding must never carry an absolute host path.
+`location.file` in a finding is the input's path relative to `--root` — the path that was really
+read, including for the finding that says no command was decided. The event log has no relative
+path there, so its findings are reported under the fixed logical name `event-log`: a finding must
+never carry an absolute host path.
 
 ## The clock
 
@@ -126,8 +127,13 @@ Command keys: `commandId`, `document`, `action`, `actor`, `at`, `expectedRevisio
 `scheduledFor`, `note`. Any other key is an error.
 
 `commandId`, `document`, `action` and `actor` are identifiers: non-empty strings of at most 200
-characters, with no leading or trailing whitespace and no control characters (C0, DEL, C1, U+2028
-or U+2029). `expectedRevision` is required and must be an integer of at least 0.
+characters, with no leading or trailing whitespace and none of the characters listed under
+[Report](#report) below — C0, DEL, C1, U+2028, U+2029 and the bidi controls. `expectedRevision`
+is required and must be an integer of at least 0.
+
+Letters are not the issue: an id in Arabic, Hebrew or any other right-to-left script is perfectly
+ordinary and is accepted, because those letters carry their own direction. It is the explicit
+**overrides** that are refused.
 
 ### Idempotency comes first
 
@@ -253,10 +259,22 @@ message)`, all string comparisons by UTF-16 code unit. `localeCompare` is never 
 on ICU data that differs between Node builds, and a report that is only deterministic on one
 machine is not deterministic.
 
-Every untrusted string that reaches a finding is flattened to one line, stripped of control
-characters and bounded — identifiers, paths and pointers as well as `evidence`. Sanitising the
-excerpt and leaving the identifiers raw is how a document id containing a newline forges an extra
-line in a human report.
+Every untrusted string that reaches a finding is flattened to one line, stripped of the characters
+below and bounded — identifiers, paths and pointers as well as `evidence`. Sanitising the excerpt
+and leaving the identifiers raw is how a document id containing a newline forges an extra line in a
+human report, so identifiers refuse the same set outright rather than being cleaned up later.
+
+| Class | Code points | Why |
+| --- | --- | --- |
+| C0 and DEL | U+0000–U+001F, U+007F | a newline forges a line; ESC starts a terminal escape; NUL cuts a value short |
+| C1 | U+0080–U+009F | U+0085 (NEL) is a line break to many consumers; U+009B is the 8-bit CSI, a control introducer needing no ESC |
+| Line and paragraph separators | U+2028, U+2029 | line breaks to JavaScript and to many text consumers |
+| Bidi and isolate controls | U+200E, U+200F, U+202A–U+202E, U+2066–U+2069 | U+202E reverses everything printed after it, so a value can display as something other than the value that was compared, stored and hashed |
+
+Tab, newline and carriage return are collapsed into a single space along with any other run of
+whitespace; everything else above is replaced by a space. The CLI flattens an unknown option the
+same way before naming it on stderr — argv is the one untrusted string that reaches a stream
+without passing through a finding.
 
 ## Exit codes
 
@@ -326,7 +344,7 @@ last-wins.
 | `event-state-mismatch` | error | An event starts from a state the replay does not leave the document in. |
 | `event-state-unknown` | error | An event names a state the machine no longer declares. |
 | `event-transition-unknown` | error | An event records a transition the machine does not declare. |
-| `identifier-invalid` | error | An identifier is empty, untrimmed, over 200 characters, or holds control characters. |
+| `identifier-invalid` | error | An identifier is empty, untrimmed, over 200 characters, or holds a control or bidi character. |
 | `input-not-json` | error | An input file is not valid JSON. |
 | `input-not-utf8` | error | An input file is not valid UTF-8; nothing was read from it. |
 | `input-too-large` | error | An input file is above `maxFileBytes`; it was not read. |

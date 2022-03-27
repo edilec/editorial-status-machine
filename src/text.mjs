@@ -21,35 +21,59 @@ export function byCodeUnit(left, right) {
 }
 
 /**
- * Characters stripped before any untrusted string is embedded in output.
+ * The characters no untrusted value may carry into output, in four classes.
  *
  * Built from code points rather than written literally: a literal U+2028 or
- * U+2029 inside a module is a line terminator to the parser, and writing one
- * into this file would be a syntax error. They are here because both are line
- * breaks to a great many consumers, and a document id carrying one forges an
- * extra line in the human report exactly as a newline does.
+ * U+2029 inside a module is a line terminator to the parser, so writing one
+ * into this file would be a syntax error, and the rest are invisible in an
+ * editor. Spelling every one of them keeps the file plain ASCII and keeps the
+ * list readable.
+ *
+ * - **C0** (U+0000-U+001F) and **DEL** (U+007F). A newline forges a line in
+ *   the human report; ESC starts a terminal escape sequence; NUL cuts a value
+ *   short in anything that reaches it through C.
+ * - **C1** (U+0080-U+009F). Easy to forget after C0, and two of them do the
+ *   same damage on their own: U+0085 NEL is a line break to a great many
+ *   consumers, and U+009B is the 8-bit CSI -- a terminal control introducer
+ *   that needs no ESC in front of it.
+ * - **Line and paragraph separators** (U+2028, U+2029), line breaks to
+ *   JavaScript and to many text consumers.
+ * - **Bidi and isolate controls** (U+200E, U+200F, U+202A-U+202E,
+ *   U+2066-U+2069). U+202E RIGHT-TO-LEFT OVERRIDE reverses everything printed
+ *   after it, so a document id can be displayed as something other than the
+ *   value that was compared, stored and hashed. Ordinary right-to-left text --
+ *   Arabic, Hebrew -- needs none of these: the letters carry their own
+ *   direction, so refusing the overrides refuses nothing legitimate.
+ */
+const DEL_AND_C1 = `${String.fromCharCode(127)}-${String.fromCharCode(159)}`
+const SEPARATORS = `${String.fromCharCode(0x2028)}${String.fromCharCode(0x2029)}`
+const BIDI =
+  `${String.fromCharCode(0x200e)}${String.fromCharCode(0x200f)}` +
+  `${String.fromCharCode(0x202a)}-${String.fromCharCode(0x202e)}` +
+  `${String.fromCharCode(0x2066)}-${String.fromCharCode(0x2069)}`
+
+/**
+ * Stripped before any untrusted string is embedded in output. Tab, newline and
+ * carriage return are left to the `\s+` collapse in `excerpt`, which turns
+ * them into the same single space.
  */
 const CONTROL = new RegExp(
   `[${String.fromCharCode(0)}-${String.fromCharCode(8)}` +
   `${String.fromCharCode(11)}${String.fromCharCode(12)}` +
   `${String.fromCharCode(14)}-${String.fromCharCode(31)}` +
-  `${String.fromCharCode(127)}-${String.fromCharCode(159)}` +
-  `${String.fromCharCode(0x2028)}${String.fromCharCode(0x2029)}]`,
+  `${DEL_AND_C1}${SEPARATORS}${BIDI}]`,
   'g',
 )
 
 /**
- * What an identifier may not contain: the whole C0 range including tab,
- * newline and carriage return, DEL, the C1 range, and both Unicode line
- * separators. `CONTROL` above leaves the three ASCII whitespace controls to
- * the `\s+` collapse that follows it; an identifier has no such second pass,
- * and a document id holding a newline is exactly the value that forged a line
- * in a human report elsewhere in this catalog.
+ * What an identifier may not contain: the same four classes, plus the three
+ * ASCII whitespace controls `CONTROL` leaves to the collapse. An identifier
+ * has no such second pass, and a value that prints differently from the value
+ * that was compared is a value nobody can audit.
  */
 const FORBIDDEN_IN_IDENTIFIER = new RegExp(
   `[${String.fromCharCode(0)}-${String.fromCharCode(31)}` +
-  `${String.fromCharCode(127)}-${String.fromCharCode(159)}` +
-  `${String.fromCharCode(0x2028)}${String.fromCharCode(0x2029)}]`,
+  `${DEL_AND_C1}${SEPARATORS}${BIDI}]`,
 )
 
 export const EXCERPT_LIMIT = 160
