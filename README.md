@@ -125,7 +125,9 @@ Each of these has a test that fails when the line enforcing it is removed.
 - **Paths are confined on real paths, both sides.** A symlink out of the root is refused; a
   legitimate file reached through a symlinked root is not.
 - **No wall clock, locale, `localeCompare`, random source, network access or filesystem
-  enumeration order** affects the output.
+  enumeration order** affects the output. Ordering is pinned by the order that comes out, for
+  inputs that sort differently under collation than by code unit — not by a scan of the source,
+  which any other spelling of a collator would pass.
 
 ## Limits and non-goals
 

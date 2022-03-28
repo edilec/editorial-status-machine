@@ -97,6 +97,10 @@ All notable changes to this project are documented in this file.
   reported, the status and the exit code, with nothing in those tests reading
   the table.
 - No wall clock, locale, `localeCompare`, random source, network access or
-  filesystem enumeration order affects the output.
+  filesystem enumeration order affects the output. Every order the report
+  exposes is pinned by asserting the emitted order for inputs that sort
+  differently under collation than by code unit, so substituting a collator --
+  under any spelling a source scan would miss -- fails a test rather than
+  silently making the output depend on the host's ICU data.
 
 No release has been published.

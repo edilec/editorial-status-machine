@@ -257,7 +257,16 @@ does every path that leaves commands undecided (`commands-not-evaluated`).
 Findings are ordered by `(location.file, command or event index, location.pointer, ruleId,
 message)`, all string comparisons by UTF-16 code unit. `localeCompare` is never used: it depends
 on ICU data that differs between Node builds, and a report that is only deterministic on one
-machine is not deterministic.
+machine is not deterministic. Every order this tool exposes — that list, the documents in the
+projection, the roles and actions a machine declares, the actions offered in a refusal's evidence,
+and the order unknown keys are reported in — is pinned by asserting the emitted order for inputs
+that genuinely order differently under collation (`Zeta` before `alpha`, since `Z` is U+005A and
+`a` is U+0061). A scan of the source for `localeCompare` is kept as a cheap guard against the
+obvious regression, but it is not what the guarantee rests on: a collator spelled another way
+passes a scan.
+
+The one exception is the final `message` comparison, which is a stability tie-break no input
+reaches: two findings that agree on file, index, pointer and rule id carry the same message.
 
 Every untrusted string that reaches a finding is flattened to one line, stripped of the characters
 below and bounded — identifiers, paths and pointers as well as `evidence`. Sanitising the excerpt

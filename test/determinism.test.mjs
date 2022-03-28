@@ -101,6 +101,16 @@ function codeOnly(source) {
     .join('\n')
 }
 
+/**
+ * A scan, and what it is not.
+ *
+ * This catches the obvious regression -- someone reaching for `localeCompare`
+ * or `Date.now()` -- cheaply and across every file at once. It is not the
+ * determinism test: a collator spelled any other way passes it while the
+ * emitted order becomes whatever the host's ICU data says. Every ordering the
+ * report exposes is pinned by observed output in `test/ordering.test.mjs`,
+ * with fixtures chosen because they order differently under collation.
+ */
 test('nothing in the shipped source reads a clock, a locale or a random source', async () => {
   for (const path of [
     'src/index.mjs', 'src/machine.mjs', 'src/events.mjs', 'src/commands.mjs', 'src/text.mjs',
