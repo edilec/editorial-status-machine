@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
-import { runEditorialMachine } from '../src/index.mjs'
+import { byCodeUnit, runEditorialMachine } from '../src/index.mjs'
 import { CLI, MACHINE, NOW, TO_PUBLISHED, command, projectDirectory, workspace } from './support.mjs'
 
 const run = promisify(execFile)
@@ -60,11 +60,12 @@ test('findings sort by command index numerically, not by pointer text', async ()
   )
 
   assert.equal(report.findings.length, 2)
-  assert.deepEqual(
-    report.findings.map((item) => item.location.pointer),
-    ['/commands/2', '/commands/10'],
-  )
-  assert.ok('/commands/10' < '/commands/2', 'the text order really is the other way round')
+  const pointers = report.findings.map((item) => item.location.pointer)
+  assert.deepEqual(pointers, ['/commands/2', '/commands/10'])
+  // The premise, taken from the pointers this run actually emitted and the
+  // comparator the tool actually uses: sorted as text they come out the other
+  // way round, so the numeric index key is what put them in the order above.
+  assert.deepEqual([...pointers].sort(byCodeUnit), ['/commands/10', '/commands/2'])
 })
 
 test('findings sort across files by name, and the order is not accidental', async () => {

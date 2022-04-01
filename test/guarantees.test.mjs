@@ -70,8 +70,9 @@ test('every path that obtains no evidence reports incomplete, never pass', async
 
   for (const [label, build] of cases) {
     const { report } = await build()
+    // `incomplete` and not merely "not pass": the weaker assertion would sit
+    // here unable to fail, since the line above has already settled it.
     assert.equal(report.status, 'incomplete', `${label} must be incomplete, not ${report.status}`)
-    assert.notEqual(report.status, 'pass', label)
   }
 })
 
