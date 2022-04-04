@@ -33,7 +33,9 @@ All notable changes to this project are documented in this file.
   revision continuity, and per-document time order;
 - refusal to append to a log that did not verify, and refusal to decide any
   command against one, because a command judged against an unknown state has
-  not been judged;
+  not been judged. The CLI decides that refusal before it looks at how many
+  events were decided, so the guard is reachable, is covered by a test, and
+  tells a reader with a broken log on stderr why their log did not grow;
 - strict UTF-8 decoding with `TextDecoder('utf-8', { fatal: true })` on every
   input, the machine definition included, so whether a file is decodable is the
   decoder's decision and never an inference drawn from the decoded text;

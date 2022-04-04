@@ -192,6 +192,36 @@ test('an input that escapes the root is refused before anything is read', async 
   assert.match(result.stderr, /--commands resolves outside the input root/)
 })
 
+test('a run that could not obtain its evidence says the log was not appended to', async () => {
+  // The refusal to append is reported, not left to be inferred from an exit
+  // code. Both shapes reach it: a log this run could not verify, and a machine
+  // it could not compile to verify one with.
+  await workspace(async ({ root, log }) => {
+    const { writeFile } = await import('node:fs/promises')
+    const args = [
+      '--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+      '--now', NOW, '--events', log, '--json',
+    ]
+
+    const first = await cli(args)
+    assert.equal(first.code, 0)
+    assert.match(first.stderr, /appended 3 event\(s\)/)
+    const seeded = await readFile(log, 'utf8')
+
+    await writeFile(log, `not json\n${seeded}`, 'utf8')
+    const broken = await cli(args)
+    assert.equal(broken.code, 2)
+    assert.match(broken.stderr, /the event log was not appended to/)
+    assert.equal(broken.stderr.includes('appended 3'), false)
+    assert.equal(await readFile(log, 'utf8'), `not json\n${seeded}`, 'the log must not have grown')
+
+    await writeFile(join(root, 'machine.json'), '{ broken', 'utf8')
+    const uncompiled = await cli(args)
+    assert.equal(uncompiled.code, 2)
+    assert.match(uncompiled.stderr, /the event log was not appended to/)
+  }, { commands: TO_PUBLISHED })
+})
+
 test('the CLI creates the log directory it was pointed at, and appends to it', async () => {
   await workspace(async ({ base, root }) => {
     const log = join(base, 'nested', 'deeper', 'events.jsonl')

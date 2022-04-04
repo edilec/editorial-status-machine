@@ -214,7 +214,9 @@ declared by the machine, that no command id appears twice, that each event leave
 where the next one starts, that revisions advance by exactly one, and that no document's
 timestamps move backwards.
 
-**Any** of those failing makes the run `incomplete` and stops the commands being decided at all.
+**Any** of those failing makes the run `incomplete` and stops the commands being decided at all,
+and the CLI says on stderr that the log was not appended to rather than leaving that to be inferred
+from the exit code.
 If the log cannot be trusted, the current state of every document in it is unknown, and a command
 judged against an unknown state has not been judged. Nothing is appended to a log that did not
 verify: fresh, valid-looking lines on top of a broken chain bury the break.

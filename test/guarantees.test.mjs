@@ -243,6 +243,41 @@ test('the human report has exactly one line per finding and per document', async
   assert.equal(lines.length, 3 + documents.length + report.findings.length)
 })
 
+test('a run never decides an event it is not allowed to append', async () => {
+  /**
+   * The invariant the CLI's refusal rests on, asserted directly: `newEvents` is
+   * non-empty only when `appendable` is true. It holds because events are built
+   * only after the machine compiled and the log verified -- which is exactly
+   * what `appendable` reports -- and if that ever stops being true the CLI
+   * would be appending onto a log it could not read.
+   */
+  const cases = [
+    ['a clean batch', () => decide(TO_PUBLISHED)],
+    ['a refused batch', () => decide([command({ actor: 'dana' })])],
+    ['an uncompilable machine', () => decide(TO_PUBLISHED, { machine: { ...MACHINE, initialState: 'x' } })],
+    ['a log line that is not JSON', () => decide(TO_PUBLISHED, {
+      mutate: ({ log }) => writeFile(log, 'not json\n', 'utf8'),
+    })],
+    ['a log that is not UTF-8', () => decide(TO_PUBLISHED, {
+      mutate: ({ log }) => writeFile(log, Buffer.from([0x7b, 0xff, 0x7d])),
+    })],
+    ['a log above maxEvents', () => decide(TO_PUBLISHED, {
+      limits: { maxEvents: 1 },
+      mutate: ({ log }) => writeFile(log, `${'{}\n'.repeat(4)}`, 'utf8'),
+    })],
+    ['a batch above maxCommands', () => decide(TO_PUBLISHED, { limits: { maxCommands: 1 } })],
+  ]
+
+  const seen = new Set()
+  for (const [label, build] of cases) {
+    const { newEvents, appendable } = await build()
+    if (newEvents.length > 0) assert.equal(appendable, true, `${label}: events decided that may not be appended`)
+    seen.add(`${appendable}:${newEvents.length > 0}`)
+  }
+  assert.ok(seen.has('true:true'), 'one case must actually decide events')
+  assert.ok(seen.has('false:false'), 'one case must actually refuse to append')
+})
+
 test('nothing in this package rewrites the event log', async () => {
   const cli = await readFile(resolve(projectDirectory, 'bin/editorial-status-machine.mjs'), 'utf8')
   assert.equal(cli.includes('appendFile'), true)

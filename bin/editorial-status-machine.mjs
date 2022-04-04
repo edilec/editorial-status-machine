@@ -154,11 +154,24 @@ async function main(argv) {
 
   const { report } = result
 
-  if (result.eventLogPath !== null && result.newEvents.length > 0) {
+  /**
+   * The refusal to append is decided first, and said out loud.
+   *
+   * Nested inside `newEvents.length > 0` it could never run: events are built
+   * only when the machine compiled and the log verified, which is exactly when
+   * appending is allowed. An unreachable guard is not defence -- no test can
+   * kill it, so nothing notices when it stops being true. Checked first it is
+   * reachable, it is the one line that tells a reader with a broken log why
+   * their log did not grow, and the test that asserts that diagnostic fails if
+   * the guard is removed.
+   */
+  if (result.eventLogPath !== null && !result.appendable) {
+    process.stderr.write(
+      'the event log was not appended to: this run could not obtain the evidence it needed, so it decided nothing to add.\n',
+    )
+  } else if (result.eventLogPath !== null && result.newEvents.length > 0) {
     if (options.dryRun) {
       process.stderr.write(`dry run: ${result.newEvents.length} event(s) were decided and not appended.\n`)
-    } else if (!result.appendable) {
-      process.stderr.write('the event log was not appended to: this run could not verify what it already held.\n')
     } else {
       try {
         await mkdir(dirname(result.eventLogPath), { recursive: true })
