@@ -259,3 +259,36 @@ test('exit 1 and exit 2 are told apart by status, not by guesswork', async () =>
     assert.equal(JSON.parse(bounded.stdout).status, 'incomplete')
   }, { commands: [command({ actor: 'dana' }), command({ commandId: 'c-2', actor: 'alice' })] })
 })
+
+test('a log that exists but cannot be inspected is named by its label, never by its host path', async () => {
+  /*
+   * This construction site was documented in test/confinement.test.mjs as
+   * unreachable, and that was wrong. resolveEventLog stats the destination
+   * itself, but a path whose PARENT is a regular file fails with ENOTDIR at the
+   * later stat, inside the run.
+   *
+   * The finding must name the log by its label. An absolute host path in a
+   * report is a leak into whatever CI system reads it, and this was the one
+   * finding able to carry one.
+   */
+  await workspace(async ({ base, root }) => {
+    const result = await cli([
+      '--root', root,
+      '--machine', 'machine.json',
+      '--commands', 'commands.json',
+      '--now', NOW,
+      '--events', join(base, 'regular.txt', 'log.jsonl'),
+      '--json',
+    ])
+
+    assert.equal(result.code, 2)
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.status, 'incomplete')
+
+    const finding = report.findings.find((item) => item.ruleId === 'input-unreadable')
+    assert.ok(finding, 'the uninspectable log must be reported')
+    assert.equal(finding.location.file, 'event-log')
+    assert.equal(finding.location.file.startsWith('/'), false)
+    assert.equal(result.stdout.includes(base), false, 'no host path may reach stdout')
+  }, { commands: [], files: { 'regular.txt': 'not a directory\n' } })
+})
