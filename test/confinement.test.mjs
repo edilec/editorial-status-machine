@@ -180,13 +180,12 @@ test('a log finding never carries the log\u2019s host path either', async () => 
       }
     }
 
-    /**
+    /*
      * The third construction site -- the one that reports a log which exists
-     * but cannot be inspected -- is not reachable from here: `resolveEventLog`
-     * has already resolved and stat'd the destination, so anything but ENOENT
-     * has been refused before the run starts. It is kept because the
-     * alternative, treating an uninspectable log as an empty one, is the defect
-     * `test/unread-inputs.test.mjs` exists to prevent.
+     * but cannot be inspected -- IS reachable, though not from here: a path
+     * whose parent is a regular file fails with ENOTDIR at the later stat,
+     * inside the run. It is covered by test/cli.test.mjs, which pins the
+     * finding to the log's label rather than its resolved host path.
      */
   })
 })
