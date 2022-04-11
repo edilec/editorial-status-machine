@@ -21,7 +21,7 @@
 
 import { createHash } from 'node:crypto'
 
-import { byCodeUnit, excerpt, isIdentifier, isPlainObject, parseInstant } from './text.mjs'
+import { byCodeUnit, excerpt, isIdentifier, isPlainObject, parseFailureDetail, parseInstant } from './text.mjs'
 
 export const GENESIS_HASH = '0'.repeat(64)
 export const EVENT_KEYS = Object.freeze([
@@ -176,7 +176,7 @@ export function parseEventLog(text, { machine, maxEvents }) {
       problems.push(fault(
         'event-line-invalid',
         pointer,
-        `Line ${number} is not a JSON object: ${excerpt(error.message, 80)}.`,
+        `Line ${number} is not a JSON object: ${excerpt(parseFailureDetail(error), 80)}.`,
       ))
       continue
     }

@@ -31,7 +31,7 @@ import {
   GENESIS_HASH, buildEvent, commandHash, initialDocument, parseEventLog, serializeEvent,
 } from './events.mjs'
 import { compileMachine } from './machine.mjs'
-import { byCodeUnit, decodeUtf8, excerpt, isPlainObject, parseInstant } from './text.mjs'
+import { byCodeUnit, decodeUtf8, excerpt, isPlainObject, parseFailureDetail, parseInstant } from './text.mjs'
 
 export const TOOL_ID = 'editorial-status-machine'
 export const REPORT_SCHEMA_VERSION = '1'
@@ -362,7 +362,7 @@ function readJson(collector, file, text) {
     record(collector, {
       file,
       ruleId: 'input-not-json',
-      message: `File is not valid JSON: ${excerpt(error.message, 120)}.`,
+      message: `File is not valid JSON: ${excerpt(parseFailureDetail(error), 120)}.`,
     })
     return { ok: false, value: null }
   }
@@ -815,5 +815,5 @@ export {
 } from './machine.mjs'
 export {
   EXCERPT_LIMIT, MAX_IDENTIFIER_LENGTH, byCodeUnit, decodeUtf8, excerpt,
-  isIdentifier, isPlainObject, parseInstant,
+  isIdentifier, isPlainObject, parseFailureDetail, parseInstant,
 } from './text.mjs'

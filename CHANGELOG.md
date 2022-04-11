@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- an input that does not parse is no longer quoted back. `JSON.parse` embeds
+  the input in one of its two error messages
+  (`Unexpected token 'A', "AKIA…" is not valid JSON`), so a command batch, a
+  machine definition or an event log line short enough to be only a credential
+  was reproduced in full on stdout by `input-not-json` or `event-line-invalid`,
+  in both output modes. `excerpt` did not stop it: the quoted span sits at the
+  front of the message and the bound cuts from the back, so truncation removed
+  the position and kept the input. `parseFailureDetail` in `src/text.mjs` now
+  keeps the position, line and column and drops the quotation;
+
 ### Added
 
 - an explicit machine definition — states, transitions, roles and an actor

@@ -287,6 +287,15 @@ whitespace; everything else above is replaced by a space. The CLI flattens an un
 same way before naming it on stderr — argv is the one untrusted string that reaches a stream
 without passing through a finding.
 
+Stripping and bounding do not cover one case on their own, so a parse failure is reported by
+position rather than by quotation. `JSON.parse` has two error messages and one of them embeds the
+input — `Unexpected token 'A', "AKIA…" is not valid JSON` for a short document, and a ten-character
+window around the offending character for a long one. A command batch, a machine definition or an
+event log line short enough to be only a credential would therefore be reproduced by its own error
+message, and bounding does not help: the quoted span is at the front of the message and the bound
+cuts from the back. `parseFailureDetail` keeps the position, line and column — which carry no input
+— and drops the quotation.
+
 ## Exit codes
 
 | Code | Meaning | stdout |
