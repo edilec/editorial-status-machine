@@ -32,6 +32,7 @@ import {
 } from './events.mjs'
 import { compileMachine } from './machine.mjs'
 import { byCodeUnit, decodeUtf8, excerpt, isPlainObject, parseFailureDetail, parseInstant } from './text.mjs'
+import { assertWritableDestination } from './write-guard.mjs'
 
 export const TOOL_ID = 'editorial-status-machine'
 export const REPORT_SCHEMA_VERSION = '1'
@@ -234,24 +235,50 @@ export async function resolveInput(rootReal, relativePath, label) {
   return { real, relative: relative.split(sep).join('/') }
 }
 
-/** Resolve the event log destination and refuse anything inside the input root. */
-export async function resolveEventLog(rootReal, destination) {
+/**
+ * Resolve the event log destination, and refuse one that is not the file the
+ * caller named.
+ *
+ * This is the only path the tool writes to, and three separate things can make
+ * it a different file from the one that was named. `assertWritableDestination`
+ * decides all three before anything is opened: a symbolic link at the
+ * destination is refused on sight rather than resolved -- resolving is the
+ * dangerous act, and following one put 3,103 bytes into a file outside this
+ * tree while the run reported success; a destination that is not a regular file
+ * is refused; and a hard link to an input is caught by device and inode, the
+ * only comparison that sees it, since it shares no path with the input and has
+ * no target to resolve.
+ *
+ * A destination that exists must be a regular file: a directory is the obvious
+ * mistake, and a FIFO or a device node is the one that would hang the append
+ * forever instead of failing. The guard decides that too, so there is one owner
+ * for it rather than a second check that can drift.
+ *
+ * The guard needs a real parent directory, and on a first run the log's
+ * directory often does not exist -- nor does it when the path names one that
+ * never can, a segment below a regular file. That is not a gap: where there is
+ * no parent directory there is no entry at the destination, so there is no link
+ * to refuse and no inode to share, and the unreadable destination is reported
+ * as missing evidence by the run itself. `resolveNearest` covers that case -- it resolves as
+ * far as the tree goes, which is what defeats a symlinked parent -- and the
+ * containment check below is the comparison the guard's `root` option makes,
+ * in the one shape this tool needs: the log is written to and the root is
+ * read-only, so the log must land outside the root rather than inside a
+ * permitted one.
+ */
+export async function resolveEventLog(rootReal, destination, inputs = []) {
   if (typeof destination !== 'string' || destination.trim() === '') {
     throw new TypeError('Event log destination must be a non-empty path')
   }
-  const { real: resolved, missing } = await resolveNearest(resolve(destination), 'Event log destination')
+  const target = resolve(destination)
+  const hasParent = await stat(dirname(target)).then((info) => info.isDirectory(), () => false)
+  if (hasParent) await assertWritableDestination(target, { inputs, label: '--events' })
+
+  const { real: resolved } = await resolveNearest(target, 'Event log destination')
   if (isInside(rootReal, resolved)) {
     throw new TypeError(
       'Event log destination is inside the input root; the log is written to and the root is read-only, so it must live elsewhere',
     )
-  }
-  if (!missing) {
-    // A destination that exists must be a regular file. A directory is the
-    // obvious mistake; a FIFO or a device node is the one that would hang the
-    // append forever instead of failing.
-    const info = await stat(resolved)
-    if (info.isDirectory()) throw new TypeError('Event log destination is a directory, not a file')
-    if (!info.isFile()) throw new TypeError('Event log destination is not a regular file')
   }
   return resolved
 }
@@ -428,7 +455,9 @@ export async function runEditorialMachine(options = {}) {
 
   const machinePath = await resolveInput(rootReal, options.machine, '--machine')
   const commandPath = await resolveInput(rootReal, options.commands, '--commands')
-  const eventLogPath = options.events === undefined ? null : await resolveEventLog(rootReal, options.events)
+  const eventLogPath = options.events === undefined
+    ? null
+    : await resolveEventLog(rootReal, options.events, [machinePath.real, commandPath.real])
 
   const collector = createCollector()
 

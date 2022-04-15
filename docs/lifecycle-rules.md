@@ -30,6 +30,20 @@ Three inputs and one output:
 - The event log is written to and the root is read-only, so a log destination inside the root is
   refused. The nearest existing ancestor of the destination is resolved before the check, so a
   symlinked parent directory cannot put the log back inside the inputs.
+- The destination itself is checked before anything is opened, because three separate things can
+  make it a different file from the one that was named, and no one of them catches the others:
+
+  | Refused | Why the obvious check misses it |
+  | --- | --- |
+  | A **symbolic link at the destination** | `realpath` *resolves* it, and resolving is the dangerous act: the append lands wherever the link points. It is refused on sight, with `lstat`. A link with no target is refused the same way — it would create the file it points at. |
+  | A **symbolic link on the way to it** | A lexical prefix check passes for a path whose parent leaves the tree. The parent is resolved first, and the resolved destination is what the containment rule above is applied to. |
+  | A **hard link to an input** | It has no target to resolve and shares no path with the input, so `realpath` and string comparison both call it a different file. It is the same file, and only device plus inode sees that. |
+
+  A destination that exists and is not a regular file — a directory, a FIFO, a device node — is
+  refused for the same reason: it is not the file the caller named, and a device node would hang
+  the append rather than fail it.
+- A refused destination is a **configuration error**: exit `2`, an empty stdout, and the reason on
+  stderr. The run never had a subject, so there is nothing to report about.
 - Every file is decoded with `TextDecoder('utf-8', { fatal: true })` — the machine definition
   included. Whether bytes are UTF-8 is the decoder's decision; the decoded text is never inspected
   to make that judgement.

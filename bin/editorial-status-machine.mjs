@@ -24,7 +24,10 @@ Options:
                           2026-03-01T09:00:00Z (required)
   --events FILE           Append-only event log, read then appended to. Resolved
                           against the working directory and refused if it lies
-                          inside --root, which is read-only.
+                          inside --root, which is read-only. A symbolic link at
+                          the destination, or one on the way to it, is refused
+                          rather than followed, and so is a destination that is
+                          the same file as an input -- a hard link included.
   --dry-run               Decide every command and append nothing
   --json                  Emit the machine-readable report on stdout
   --max-file-bytes N      Maximum bytes per input file (default 1048576)

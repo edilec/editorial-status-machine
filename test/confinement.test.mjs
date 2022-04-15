@@ -228,7 +228,9 @@ test('the log destination must be a file, and must have somewhere to live', asyn
     const root = join(base, 'root')
     await seed(root)
     await mkdir(join(base, 'dir'), { recursive: true })
-    await assert.rejects(resolveEventLog(root, join(base, 'dir')), /is a directory/)
+    // The write guard owns the destination's kind: a directory, a FIFO or a
+    // device node is refused as "not a regular file" before anything opens it.
+    await assert.rejects(resolveEventLog(root, join(base, 'dir')), /--events exists and is not a regular file/)
     await assert.rejects(resolveEventLog(root, ''), /non-empty path/)
     await assert.rejects(resolveEventLog(root, '   '), /non-empty path/)
   })
@@ -313,9 +315,13 @@ test('a dangling symlink is refused unresolved, not treated as an absent file', 
       runEditorialMachine({ root, machine: 'machine.json', commands: 'dangling.json', now: NOW }),
       /symbolic link with no target/,
     )
+    // The log is refused one step earlier than an input is: the write guard
+    // refuses a link at the destination on sight, whether or not it has a
+    // target, because resolving one is the act that puts the append somewhere
+    // the caller did not name.
     await assert.rejects(
       resolveEventLog(root, join(base, 'dangling-log.jsonl')),
-      /Event log destination is a symbolic link with no target/,
+      /--events is a symbolic link/,
     )
   })
 })

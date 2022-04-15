@@ -6,6 +6,23 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- `--events` no longer appends through a link or over an input. The destination
+  was resolved with `realpath` and then written to, which means a symbolic link
+  at the destination was *followed*: a log pointed at a link whose target sat
+  outside `--root` took 3,103 bytes of events into that file and reported
+  `appended 9 event(s) after 0 existing one(s).` at exit `0`. A link with no
+  target created the file it pointed at. And a destination hard-linked to
+  `--machine` or `--commands` shares no path with it and has no target to
+  resolve, so nothing in the resolver could see that it was the same file --
+  only device and inode can. `assertWritableDestination` in
+  `src/write-guard.mjs` now refuses a link at the destination on sight with
+  `lstat`, before anything resolves it, refuses a destination that is not a
+  regular file, and compares device and inode against both inputs. A refused
+  destination is a configuration error: exit `2`, empty stdout.
+  `test/write-guard.test.mjs` drives one case per hole through the real binary,
+  and one more for the destinations that must keep working, because a guard
+  that refuses everything passes every data-loss case while making the option
+  useless;
 - an input that does not parse is no longer quoted back. `JSON.parse` embeds
   the input in one of its two error messages
   (`Unexpected token 'A', "AKIA…" is not valid JSON`), so a command batch, a
