@@ -36,7 +36,7 @@ editorial-status-machine \
   --root examples/clean \
   --machine machine.json \
   --commands commands.json \
-  --events build/editorial-events.jsonl \
+  --events ../../build/editorial-events.jsonl \
   --now 2026-03-10T12:00:00Z
 ```
 
@@ -57,6 +57,13 @@ was. That is the property the tool exists for.
 `--json` emits the machine-readable report on stdout; `--dry-run` decides everything and appends
 nothing; `--help` prints the full flag list.
 
+Every path option is resolved against `--root`, `--events` included, so the same command writes
+the same log from whatever directory it is run in. `--root` is read-only — the log is the one
+thing written — so a relative log destination names its way out of the root, which is why the
+example reads `../../build/editorial-events.jsonl`. An absolute path is taken as given. A
+destination that resolves back inside the root is refused, and so is one that is a symbolic link,
+or the same file as an input.
+
 ### As a library
 
 ```js
@@ -66,7 +73,7 @@ const { report, newEvents, appendable, documents } = await runEditorialMachine({
   root: 'examples/clean',
   machine: 'machine.json',
   commands: 'commands.json',
-  events: 'build/editorial-events.jsonl',
+  events: '../../build/editorial-events.jsonl',
   now: '2026-03-10T12:00:00Z',
 })
 ```

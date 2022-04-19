@@ -13,7 +13,7 @@ Three inputs and one output:
 | `--root` | read-only | the working directory |
 | `--machine` | read-only | `--root`, and must really be inside it |
 | `--commands` | read-only | `--root`, and must really be inside it |
-| `--events` | read, then appended | the working directory, and must **not** be inside `--root` |
+| `--events` | read, then appended | `--root`, and must **not** resolve inside it |
 
 - Every input path is resolved with `realpath` and checked against the `realpath` of the root.
   Both sides are resolved: rejecting `../` is not confinement, because a symbolic link planted
@@ -27,8 +27,13 @@ Three inputs and one output:
   resolve is a **dangling symbolic link**, not an absent file, and is refused unresolved:
   treating it as absent would hand back a path that the next open follows out of the tree the
   moment the link's target appears.
+- Every path option is resolved against `--root`, the log included, so the same command names the
+  same files from whatever directory it is run in. Resolved against the working directory instead,
+  one command wrote its log to a different file from each directory it was run in, which for an
+  append-only chain splits the history in two without saying so.
 - The event log is written to and the root is read-only, so a log destination inside the root is
-  refused. The nearest existing ancestor of the destination is resolved before the check, so a
+  refused. A relative destination therefore names its way out of the root — `../events.jsonl` —
+  and an absolute one is taken as given. The nearest existing ancestor of the destination is resolved before the check, so a
   symlinked parent directory cannot put the log back inside the inputs.
 - The destination itself is checked before anything is opened, because three separate things can
   make it a different file from the one that was named, and no one of them catches the others:

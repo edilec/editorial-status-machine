@@ -6,6 +6,15 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- `--events` is now resolved against `--root`, like `--machine` and
+  `--commands`, instead of against the working directory. The same command run
+  from two directories wrote two logs, each with its own hash chain claiming to
+  be the history of the same documents and neither saying so; running it from
+  inside a checkout left an untracked `events.jsonl` in the repository. The root
+  stays read-only, so a relative destination names its way out of it --
+  `--events ../events.jsonl` -- and an absolute path is taken as given, exactly
+  as before. The example in the README and in `npm run example` now reads
+  `../../build/editorial-events.jsonl` and writes the same file it always did;
 - `--events` no longer appends through a link or over an input. The destination
   was resolved with `realpath` and then written to, which means a symbolic link
   at the destination was *followed*: a log pointed at a link whose target sat

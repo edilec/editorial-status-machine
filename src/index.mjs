@@ -249,6 +249,13 @@ export async function resolveInput(rootReal, relativePath, label) {
  * only comparison that sees it, since it shares no path with the input and has
  * no target to resolve.
  *
+ * A relative destination is resolved against `rootReal`, the same base as
+ * `--machine` and `--commands`. Against the working directory instead, the one
+ * command wrote its log to a different file from each directory it was run in
+ * -- which, for an append-only chain, silently splits the history in two. The
+ * root is read-only, so a relative log has to name its way out of it
+ * (`../events.jsonl`); an absolute path is taken as given, as it always was.
+ *
  * A destination that exists must be a regular file: a directory is the obvious
  * mistake, and a FIFO or a device node is the one that would hang the append
  * forever instead of failing. The guard decides that too, so there is one owner
@@ -270,7 +277,7 @@ export async function resolveEventLog(rootReal, destination, inputs = []) {
   if (typeof destination !== 'string' || destination.trim() === '') {
     throw new TypeError('Event log destination must be a non-empty path')
   }
-  const target = resolve(destination)
+  const target = resolve(rootReal, destination)
   const hasParent = await stat(dirname(target)).then((info) => info.isDirectory(), () => false)
   if (hasParent) await assertWritableDestination(target, { inputs, label: '--events' })
 

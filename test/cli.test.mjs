@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
@@ -176,10 +176,41 @@ test('an input named but absent yields exit 2 with an incomplete report on stdou
 })
 
 test('a log destination inside the input root is refused before anything is read', async () => {
-  const result = await cli([...CLEAN, '--now', NOW, '--events', 'examples/clean/events.jsonl'])
+  // Relative to --root, like every other path option, so a bare name lands in
+  // the root -- which is read-only.
+  const result = await cli([...CLEAN, '--now', NOW, '--events', 'events.jsonl'])
   assert.equal(result.code, 2)
   assert.equal(result.stdout, '')
   assert.match(result.stderr, /inside the input root/)
+})
+
+test('--events is resolved against --root, so one command writes one log from any directory', async () => {
+  /*
+   * Against the working directory it did not. The same command run from two
+   * places wrote two logs, each with its own hash chain claiming to be the
+   * history of the same documents, and neither of them saying so. Running it
+   * from inside this repository put an untracked events.jsonl in the checkout.
+   */
+  await workspace(async ({ base, root }) => {
+    const elsewhere = join(base, 'elsewhere')
+    await mkdir(elsewhere)
+    const argv = [
+      '--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+      '--now', NOW, '--events', '../events.jsonl',
+    ]
+
+    const first = await cli(argv, base)
+    assert.equal(first.code, 0)
+    assert.match(first.stderr, /appended 3 event\(s\) after 0 existing one\(s\)/)
+
+    const second = await cli(argv, elsewhere)
+    assert.equal(second.code, 0)
+    assert.doesNotMatch(second.stderr, /appended/, 'it found the same log, so every command was a retry')
+
+    assert.deepEqual(await readdir(elsewhere), [], 'the working directory is not a log destination')
+    const log = await readFile(join(base, 'events.jsonl'), 'utf8')
+    assert.equal(log.trimEnd().split('\n').length, 3, 'one chain, not two')
+  }, { commands: TO_PUBLISHED })
 })
 
 test('an input that escapes the root is refused before anything is read', async () => {
