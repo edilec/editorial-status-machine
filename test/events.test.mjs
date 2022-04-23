@@ -194,6 +194,41 @@ test('a log whose replay disagrees with an event’s "from" is refused', () => {
   assert.ok(result.problems.some((item) => item.ruleId === 'event-state-mismatch'))
 })
 
+test('a replay mismatch never describes two different accepted states as the same state', () => {
+  const compiled = compileMachine({
+    schemaVersion: '1', name: 'space-distinction', initialState: 'review ready',
+    roles: ['editor'], actors: [{ id: 'alice', roles: ['editor'] }],
+    states: [{ id: 'review ready' }, { id: 'review  ready' }, { id: 'done', terminal: true }],
+    transitions: [
+      { from: 'review ready', action: 'advance', to: 'review  ready', roles: ['editor'] },
+      { from: 'review ready', action: 'finish', to: 'done', roles: ['editor'] },
+      { from: 'review  ready', action: 'finish', to: 'done', roles: ['editor'] },
+    ],
+  }, DEFAULT_LIMITS)
+  assert.notEqual(compiled.machine, null)
+  const first = {
+    seq: 1, commandId: 'c-1', document: 'doc-a', action: 'advance',
+    from: 'review ready', to: 'review  ready', actor: 'alice',
+    at: '2026-03-01T09:00:00.000Z', revision: 1, scheduledFor: null,
+    commandHash: 'a'.repeat(64),
+  }
+  first.hash = eventHash(GENESIS_HASH, first)
+  const good = parseEventLog(`${serializeEvent(first)}\n`, { machine: compiled.machine, maxEvents: 2 })
+  assert.equal(good.trusted, true)
+  assert.deepEqual(good.problems, [])
+
+  const second = {
+    ...first, seq: 2, commandId: 'c-2', action: 'finish', to: 'done',
+    at: '2026-03-02T09:00:00.000Z', revision: 2, commandHash: 'b'.repeat(64),
+  }
+  second.hash = eventHash(first.hash, second)
+  const mismatch = parseEventLog(`${serializeEvent(first)}\n${serializeEvent(second)}\n`,
+    { machine: compiled.machine, maxEvents: 2 })
+  assert.equal(mismatch.trusted, false)
+  assert.deepEqual(mismatch.problems.map(({ ruleId }) => ruleId), ['event-state-mismatch'])
+  assert.match(mismatch.problems[0].message, /raw UTF-16 offset 7: U\+0072 versus U\+0020/)
+})
+
 test('a revision that does not follow the one before it is refused', () => {
   const lines = log(THREE_STEPS).trimEnd().split('\n')
   const second = JSON.parse(lines[1])

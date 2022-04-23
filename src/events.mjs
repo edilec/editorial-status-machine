@@ -133,6 +133,16 @@ function fieldProblem(line, field, message, evidence) {
   )
 }
 
+function firstDifferentUnit(left, right) {
+  let offset = 0
+  while (offset < left.length && offset < right.length && left.charCodeAt(offset) === right.charCodeAt(offset)) offset += 1
+  return offset
+}
+
+function unitAt(value, offset) {
+  return offset < value.length ? `U+${value.charCodeAt(offset).toString(16).toUpperCase().padStart(4, '0')}` : '<end>'
+}
+
 /**
  * Parse, verify and replay a log.
  *
@@ -292,10 +302,14 @@ export function parseEventLog(text, { machine, maxEvents }) {
 
     const current = documents.get(value.document) ?? initialDocument(machine)
     if (current.state !== value.from) {
+      const fromShown = excerpt(value.from, 40)
+      const currentShown = excerpt(current.state, 40)
+      const offset = fromShown === currentShown ? firstDifferentUnit(value.from, current.state) : null
+      const distinction = offset === null ? '' : ` The raw UTF-16 offset ${offset}: ${unitAt(value.from, offset)} versus ${unitAt(current.state, offset)}.`
       problems.push(fault(
         'event-state-mismatch',
         pointer,
-        `Line ${number} moves "${excerpt(value.document, 60)}" from "${excerpt(value.from, 40)}", but replaying the log leaves it in "${excerpt(current.state, 40)}".`,
+        `Line ${number} moves "${excerpt(value.document, 60)}" from "${fromShown}", but replaying the log leaves it in "${currentShown}".${distinction}`,
       ))
       continue
     }
