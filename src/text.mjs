@@ -75,6 +75,7 @@ const FORBIDDEN_IN_IDENTIFIER = new RegExp(
   `[${String.fromCharCode(0)}-${String.fromCharCode(31)}` +
   `${DEL_AND_C1}${SEPARATORS}${BIDI}]`,
 )
+const DEFAULT_IGNORABLE = /\p{Default_Ignorable_Code_Point}/u
 
 export const EXCERPT_LIMIT = 160
 export const MAX_IDENTIFIER_LENGTH = 200
@@ -89,7 +90,8 @@ export const MAX_IDENTIFIER_LENGTH = 200
  * never emitted.
  */
 export function excerpt(value, limit = EXCERPT_LIMIT) {
-  const flattened = String(value).replace(CONTROL, ' ').replace(/\s+/g, ' ').trim()
+  const flattened = String(value).replace(CONTROL, ' ')
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, ' ').replace(/\s+/g, ' ').trim()
   if (flattened.length <= limit) return flattened
   return `${flattened.slice(0, limit)}...`
 }
@@ -140,7 +142,7 @@ export function isIdentifier(value) {
   if (typeof value !== 'string') return false
   if (value.length === 0 || value.length > MAX_IDENTIFIER_LENGTH) return false
   if (value.trim() !== value) return false
-  return !FORBIDDEN_IN_IDENTIFIER.test(value)
+  return !FORBIDDEN_IN_IDENTIFIER.test(value) && !DEFAULT_IGNORABLE.test(value)
 }
 
 /**

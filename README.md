@@ -118,6 +118,9 @@ Each of these has a test that fails when the line enforcing it is removed.
 - **A used command id carrying different instructions is refused**, not swallowed as a duplicate.
 - **Roles come from the machine.** A command names an actor and can never carry the roles it is
   judged against.
+- **Identifiers must remain visible as compared.** Default-ignorable characters such as CGJ or
+  variation selectors cannot serve as actor, state, action or command identities; unsupported
+  values are not echoed raw into the report.
 - **A command names an action, not a destination**, so no expressible command skips a state.
 - **`pass` with `checked: 0` is not reachable.** An empty batch, a machine that would not compile,
   a log that would not verify and a bounded-out batch are all `incomplete`.

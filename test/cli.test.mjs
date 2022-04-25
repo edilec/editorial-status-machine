@@ -49,6 +49,34 @@ test('the clean example passes, with the report on stdout and nothing else', asy
   assert.deepEqual(report.findings.map((item) => item.ruleId), ['command-replayed'])
 })
 
+test('visually empty default-ignorable actor identities cannot authorize clean commands', async () => {
+  const machine = JSON.parse(await readFile(join(projectDirectory, 'examples/clean/machine.json'), 'utf8'))
+  const commands = JSON.parse(await readFile(join(projectDirectory, 'examples/clean/commands.json'), 'utf8'))
+  await workspace(async ({ root }) => {
+    const argv = ['--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+      '--now', NOW, '--json', '--dry-run']
+    const good = await cli(argv)
+    assert.equal(good.code, 0)
+    assert.equal(JSON.parse(good.stdout).summary.applied, 9)
+    for (const invisible of ['\u034f', '\ufe0f']) {
+      const changedMachine = structuredClone(machine)
+      const changedCommands = structuredClone(commands)
+      changedMachine.actors.find(actor => actor.id === 'alice').id = invisible
+      for (const item of changedCommands) if (item.actor === 'alice') item.actor = invisible
+      await workspace(async ({ root: changedRoot }) => {
+        const result = await cli(['--root', changedRoot, '--machine', 'machine.json',
+          '--commands', 'commands.json', '--now', NOW, '--json', '--dry-run'])
+        assert.equal(result.code, 2)
+        const report = JSON.parse(result.stdout)
+        assert.equal(report.status, 'incomplete')
+        assert.equal(report.summary.applied, 0)
+        assert.equal(report.findings.some(f => f.ruleId === 'identifier-invalid'), true)
+        assert.equal(result.stdout.includes(invisible), false)
+      }, { machine: changedMachine, commands: changedCommands })
+    }
+  }, { machine, commands })
+})
+
 test('the broken example fails with exit 1 and keeps the three refusals distinct', async () => {
   const result = await cli([...BROKEN, '--now', NOW, '--json'])
   assert.equal(result.code, 1)
