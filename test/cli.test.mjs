@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdir, readFile, readdir } from 'node:fs/promises'
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
@@ -75,6 +75,43 @@ test('visually empty default-ignorable actor identities cannot authorize clean c
       }, { machine: changedMachine, commands: changedCommands })
     }
   }, { machine, commands })
+})
+
+test('distinct machine filenames retain safe unambiguous locations', async () => {
+  const good = await cli([...CLEAN, '--now', NOW, '--json', '--dry-run'])
+  assert.equal(good.code, 0)
+  assert.equal(JSON.parse(good.stdout).status, 'pass')
+
+  await workspace(async ({ root }) => {
+    const names = [
+      'machine\u0085.json',
+      'machine .json',
+      'machine\\u0085.json',
+      `${'m'.repeat(215)}X.json`,
+      `${'m'.repeat(215)}Y.json`,
+    ]
+    const labels = []
+    for (const name of names) {
+      await writeFile(join(root, name), '{}\n', 'utf8')
+      const result = await cli(['--root', root, '--machine', name, '--commands', 'commands.json',
+        '--now', NOW, '--json', '--dry-run'])
+      assert.equal(result.code, 2)
+      const report = JSON.parse(result.stdout)
+      assert.equal(report.status, 'incomplete')
+      assert.ok(report.findings.length > 0)
+      const locations = [...new Set(report.findings
+        .filter(finding => finding.location.file !== 'commands.json')
+        .map(finding => finding.location.file))]
+      assert.equal(locations.length, 1, 'one malformed machine has one file label')
+      assert.equal(result.stdout.includes('\u0085'), false)
+      labels.push(locations[0])
+    }
+    assert.deepEqual(labels.slice(0, 3), [
+      'machine\\u0085.json', 'machine .json', 'machine\\\\u0085.json',
+    ])
+    assert.notEqual(labels[3], labels[4], 'long names with the same prefix remain distinct')
+    assert.ok(labels.every(label => label.length <= 200))
+  })
 })
 
 test('the broken example fails with exit 1 and keeps the three refusals distinct', async () => {

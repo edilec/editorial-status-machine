@@ -172,7 +172,7 @@ test('createFinding sanitises every string it copies, not only the evidence', ()
   })
 
   assert.equal(finding.message, 'bad ERROR forged/ forged-rule invented')
-  assert.equal(finding.location.file, 'commands json')
+  assert.equal(finding.location.file, 'commands\\u000ajson')
   assert.equal(finding.location.pointer, '/commands /0')
   assert.equal(finding.evidence, 'post id')
   assert.equal(finding.suggestion, 'fix it')

@@ -31,7 +31,7 @@ import {
   GENESIS_HASH, buildEvent, commandHash, initialDocument, parseEventLog, serializeEvent,
 } from './events.mjs'
 import { compileMachine } from './machine.mjs'
-import { byCodeUnit, decodeUtf8, excerpt, isPlainObject, parseFailureDetail, parseInstant } from './text.mjs'
+import { byCodeUnit, decodeUtf8, excerpt, isPlainObject, parseFailureDetail, parseInstant, pathLabel } from './text.mjs'
 import { assertWritableDestination } from './write-guard.mjs'
 
 export const TOOL_ID = 'editorial-status-machine'
@@ -317,7 +317,7 @@ export function createFinding(row) {
     ruleId: row.ruleId,
     severity,
     message: excerpt(row.message, MESSAGE_LIMIT),
-    location: { file: excerpt(row.file, LOCATION_LIMIT), pointer: excerpt(row.pointer, LOCATION_LIMIT) },
+    location: { file: pathLabel(row.file), pointer: excerpt(row.pointer, LOCATION_LIMIT) },
   }
   if (row.evidence !== undefined && row.evidence !== '') finding.evidence = excerpt(row.evidence)
   if (row.suggestion !== undefined) finding.suggestion = excerpt(row.suggestion, SUGGESTION_LIMIT)

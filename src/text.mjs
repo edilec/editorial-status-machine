@@ -7,6 +7,8 @@
  * never as something that can shape a line of output.
  */
 
+import { createHash } from 'node:crypto'
+
 /**
  * Order by UTF-16 code unit.
  *
@@ -79,6 +81,8 @@ const DEFAULT_IGNORABLE = /\p{Default_Ignorable_Code_Point}/u
 
 export const EXCERPT_LIMIT = 160
 export const MAX_IDENTIFIER_LENGTH = 200
+const PATH_LABEL_LIMIT = 200
+const UNSAFE_PATH_CHARACTER = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u
 
 /**
  * A bounded, single-line, control-free rendering of an untrusted string.
@@ -94,6 +98,32 @@ export function excerpt(value, limit = EXCERPT_LIMIT) {
     .replace(/\p{Default_Ignorable_Code_Point}/gu, ' ').replace(/\s+/g, ' ').trim()
   if (flattened.length <= limit) return flattened
   return `${flattened.slice(0, limit)}...`
+}
+
+/**
+ * Preserve a relative file's identity in a bounded, safe report location.
+ * General-purpose excerpts flatten distinct path characters into one space.
+ * Escape those characters and literal backslashes instead, so a file named
+ * with a control cannot be confused with a file named with its escape text.
+ * A full digest of UTF-16 code units distinguishes names beyond the prefix.
+ */
+export function pathLabel(value) {
+  const raw = String(value)
+  let rendered = ''
+  for (const character of raw) {
+    if (character === '\\') {
+      rendered += '\\\\'
+    } else if (UNSAFE_PATH_CHARACTER.test(character) || (character !== ' ' && /\p{White_Space}/u.test(character))) {
+      const point = character.codePointAt(0).toString(16).padStart(4, '0')
+      rendered += point.length > 4 ? `\\u{${point}}` : `\\u${point}`
+    } else {
+      rendered += character
+    }
+  }
+  if (rendered.length <= PATH_LABEL_LIMIT) return rendered
+  const digest = createHash('sha256').update(raw, 'utf16le').digest('hex')
+  const suffix = `... [utf16:${raw.length};sha256:${digest}]`
+  return `${rendered.slice(0, PATH_LABEL_LIMIT - suffix.length)}${suffix}`
 }
 
 /**

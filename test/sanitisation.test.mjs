@@ -146,7 +146,8 @@ test('a file name carrying a class reaches the report sanitised, and names the f
     assert.equal(report.status, 'incomplete')
     assert.deepEqual(
       report.findings.map((item) => [item.ruleId, item.location.file]),
-      [['commands-not-evaluated', 'cmd .json'], ['input-not-json', 'cmd .json']],
+      [['commands-not-evaluated', 'cmd\\u0085\\u202e.json'],
+        ['input-not-json', 'cmd\\u0085\\u202e.json']],
     )
     for (const code of [0x85, 0x202e]) {
       assert.equal(JSON.stringify(report).includes(String.fromCharCode(code)), false, String(code))

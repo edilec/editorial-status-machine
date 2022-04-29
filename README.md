@@ -121,6 +121,8 @@ Each of these has a test that fails when the line enforcing it is removed.
 - **Identifiers must remain visible as compared.** Default-ignorable characters such as CGJ or
   variation selectors cannot serve as actor, state, action or command identities; unsupported
   values are not echoed raw into the report.
+- **Finding file locations identify the actual file.** Unsafe path characters and literal escape
+  text remain distinguishable; long paths use a bounded prefix and SHA-256 of their UTF-16 units.
 - **A command names an action, not a destination**, so no expressible command skips a state.
 - **`pass` with `checked: 0` is not reachable.** An empty batch, a machine that would not compile,
   a log that would not verify and a bounded-out batch are all `incomplete`.
