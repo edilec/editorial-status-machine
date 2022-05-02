@@ -226,7 +226,54 @@ test('a replay mismatch never describes two different accepted states as the sam
     { machine: compiled.machine, maxEvents: 2 })
   assert.equal(mismatch.trusted, false)
   assert.deepEqual(mismatch.problems.map(({ ruleId }) => ruleId), ['event-state-mismatch'])
-  assert.match(mismatch.problems[0].message, /raw UTF-16 offset 7: U\+0072 versus U\+0020/)
+  assert.doesNotMatch(mismatch.problems[0].message, /UTF-16 offset|U\+[0-9A-F]{4}/u)
+  assert.match(mismatch.problems[0].message, /bounded excerpts coincide/i)
+  assert.equal(mismatch.problems[0].pointer, '/events/1/from')
+})
+
+test('replay mismatch does not reveal hidden state suffixes through code-unit evidence', () => {
+  const prefix = `${'a'.repeat(55)}token=`
+  const red = `${prefix}RED`
+  const blue = `${prefix}BLUE`
+  const green = `${prefix}GREEN`
+  const compiled = compileMachine({
+    schemaVersion: '1', name: 'bounded-state-identity', initialState: red,
+    roles: ['editor'], actors: [{ id: 'alice', roles: ['editor'] }],
+    states: [{ id: red }, { id: blue }, { id: green }, { id: 'done', terminal: true }],
+    transitions: [
+      { from: red, action: 'advance', to: blue, roles: ['editor'] },
+      { from: red, action: 'finish', to: 'done', roles: ['editor'] },
+      { from: green, action: 'finish', to: 'done', roles: ['editor'] },
+    ],
+  }, DEFAULT_LIMITS)
+  assert.notEqual(compiled.machine, null)
+  const first = {
+    seq: 1, commandId: 'c-1', document: 'doc-a', action: 'advance', from: red, to: blue,
+    actor: 'alice', at: '2026-03-01T09:00:00.000Z', revision: 1, scheduledFor: null,
+    commandHash: 'a'.repeat(64),
+  }
+  first.hash = eventHash(GENESIS_HASH, first)
+  const good = parseEventLog(`${serializeEvent(first)}\n`, { machine: compiled.machine, maxEvents: 2 })
+  assert.equal(good.trusted, true)
+  assert.deepEqual(good.problems, [])
+
+  const mismatchMessages = []
+  for (const from of [red, green]) {
+    const second = {
+      ...first, seq: 2, commandId: 'c-2', action: 'finish', from, to: 'done',
+      at: '2026-03-02T09:00:00.000Z', revision: 2, commandHash: 'b'.repeat(64),
+    }
+    second.hash = eventHash(first.hash, second)
+    const result = parseEventLog(`${serializeEvent(first)}\n${serializeEvent(second)}\n`,
+      { machine: compiled.machine, maxEvents: 2 })
+    assert.equal(result.trusted, false)
+    assert.deepEqual(result.problems.map(({ ruleId }) => ruleId), ['event-state-mismatch'])
+    assert.doesNotMatch(result.problems[0].message, /UTF-16 offset|U\+[0-9A-F]{4}/u)
+    assert.match(result.problems[0].message, /bounded excerpts coincide/i)
+    assert.equal(result.problems[0].pointer, '/events/1/from')
+    mismatchMessages.push(result.problems[0].message)
+  }
+  assert.equal(mismatchMessages[0], mismatchMessages[1])
 })
 
 test('a revision that does not follow the one before it is refused', () => {
