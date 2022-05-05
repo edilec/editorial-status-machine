@@ -292,15 +292,10 @@ export function parseEventLog(text, { machine, maxEvents }) {
 
     const current = documents.get(value.document) ?? initialDocument(machine)
     if (current.state !== value.from) {
-      const fromShown = excerpt(value.from, 40)
-      const currentShown = excerpt(current.state, 40)
-      const message = fromShown === currentShown
-        ? `Line ${number} moves "${excerpt(value.document, 60)}" from a state that differs from its replayed state. Bounded excerpts coincide; inspect ${pointer}/from and earlier accepted events.`
-        : `Line ${number} moves "${excerpt(value.document, 60)}" from "${fromShown}", but replaying the log leaves it in "${currentShown}".`
       problems.push(fault(
         'event-state-mismatch',
         `${pointer}/from`,
-        message,
+        `Line ${number} starts from a state that differs from the replayed state for this document; inspect ${pointer}/from and earlier accepted events.`,
       ))
       continue
     }

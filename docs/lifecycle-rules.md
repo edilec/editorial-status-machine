@@ -395,7 +395,7 @@ reporting nothing that fails it.
 | `event-out-of-order` | error | A document's events move backwards in time. |
 | `event-revision-broken` | error | An event's revision does not follow the one before it. |
 | `event-sequence-broken` | error | `seq` is not contiguous from 1: a line was removed, reordered or inserted. |
-| `event-state-mismatch` | error | An event starts from a state the replay does not leave the document in. The finding points to that event's `from` field. If bounded excerpts coincide, the message directs a reader to the source history without revealing a differing code unit. |
+| `event-state-mismatch` | error | An event starts from a state the replay does not leave the document in. The finding points to that event's `from` field and does not echo either state ID, even when it would fit in a bounded excerpt. |
 | `event-state-unknown` | error | An event names a state the machine no longer declares. |
 | `event-transition-unknown` | error | An event records a transition the machine does not declare. |
 | `identifier-invalid` | error | An identifier is empty, untrimmed, over 200 characters, or holds a control or bidi character. |

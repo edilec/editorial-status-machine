@@ -65,6 +65,29 @@ function replay(text, overrides = {}) {
   return parseEventLog(text, { machine, maxEvents: DEFAULT_LIMITS.maxEvents, ...overrides })
 }
 
+function tokenStateFixture() {
+  const secret = 'token=SYNTHETIC_SECRET_CANARY'
+  const compiled = compileMachine({
+    schemaVersion: '1', name: 'token-state', initialState: secret,
+    roles: ['editor'], actors: [{ id: 'alice', roles: ['editor'] }],
+    states: [{ id: secret }, { id: 'reviewed' }, { id: 'done', terminal: true }],
+    transitions: [
+      { from: secret, action: 'advance', to: 'reviewed', roles: ['editor'] },
+      { from: secret, action: 'finish', to: 'done', roles: ['editor'] },
+      { from: 'reviewed', action: 'finish', to: 'done', roles: ['editor'] },
+    ],
+  }, DEFAULT_LIMITS)
+  assert.notEqual(compiled.machine, null)
+  const first = {
+    seq: 1, commandId: 'c-1', document: 'doc-a', action: 'advance',
+    from: secret, to: 'reviewed', actor: 'alice',
+    at: '2026-03-01T09:00:00.000Z', revision: 1, scheduledFor: null,
+    commandHash: 'a'.repeat(64),
+  }
+  first.hash = eventHash(GENESIS_HASH, first)
+  return { secret, machine: compiled.machine, first }
+}
+
 test('an empty log replays to nothing and is trusted', () => {
   const result = replay('')
   assert.equal(result.trusted, true)
@@ -226,8 +249,9 @@ test('a replay mismatch never describes two different accepted states as the sam
     { machine: compiled.machine, maxEvents: 2 })
   assert.equal(mismatch.trusted, false)
   assert.deepEqual(mismatch.problems.map(({ ruleId }) => ruleId), ['event-state-mismatch'])
-  assert.doesNotMatch(mismatch.problems[0].message, /UTF-16 offset|U\+[0-9A-F]{4}/u)
-  assert.match(mismatch.problems[0].message, /bounded excerpts coincide/i)
+  assert.match(mismatch.problems[0].message, /differs from the replayed state/i)
+  assert.match(mismatch.problems[0].message, /inspect \/events\/1\/from/i)
+  assert.equal(mismatch.problems[0].message.includes('review ready'), false)
   assert.equal(mismatch.problems[0].pointer, '/events/1/from')
 })
 
@@ -268,12 +292,31 @@ test('replay mismatch does not reveal hidden state suffixes through code-unit ev
       { machine: compiled.machine, maxEvents: 2 })
     assert.equal(result.trusted, false)
     assert.deepEqual(result.problems.map(({ ruleId }) => ruleId), ['event-state-mismatch'])
-    assert.doesNotMatch(result.problems[0].message, /UTF-16 offset|U\+[0-9A-F]{4}/u)
-    assert.match(result.problems[0].message, /bounded excerpts coincide/i)
+    assert.match(result.problems[0].message, /differs from the replayed state/i)
+    assert.equal(result.problems[0].message.includes(prefix), false)
     assert.equal(result.problems[0].pointer, '/events/1/from')
     mismatchMessages.push(result.problems[0].message)
   }
   assert.equal(mismatchMessages[0], mismatchMessages[1])
+})
+
+test('a short accepted state ID is never echoed by event-state-mismatch', () => {
+  const { secret, machine: tokenMachine, first } = tokenStateFixture()
+  const good = parseEventLog(`${serializeEvent(first)}\n`, { machine: tokenMachine, maxEvents: 2 })
+  assert.equal(good.trusted, true)
+  assert.deepEqual(good.problems, [])
+  const second = {
+    ...first, seq: 2, commandId: 'c-2', action: 'finish', to: 'done',
+    at: '2026-03-02T09:00:00.000Z', revision: 2, commandHash: 'b'.repeat(64),
+  }
+  second.hash = eventHash(first.hash, second)
+  const result = parseEventLog(`${serializeEvent(first)}\n${serializeEvent(second)}\n`,
+    { machine: tokenMachine, maxEvents: 2 })
+  assert.equal(result.trusted, false)
+  assert.deepEqual(result.problems.map(({ ruleId }) => ruleId), ['event-state-mismatch'])
+  assert.equal(JSON.stringify(result.problems).includes(secret), false)
+  assert.equal(result.problems[0].pointer, '/events/1/from')
+  assert.match(result.problems[0].message, /inspect \/events\/1\/from/i)
 })
 
 test('a revision that does not follow the one before it is refused', () => {
