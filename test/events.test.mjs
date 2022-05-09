@@ -181,6 +181,26 @@ test('a log recording a transition the machine no longer declares is refused', (
   assert.ok(result.problems.some((item) => item.ruleId === 'event-state-unknown'))
 })
 
+test('event-state-unknown locates either undeclared side without echoing its name', () => {
+  const { secret, machine: tokenMachine, first } = tokenStateFixture()
+  const accepted = parseEventLog(`${serializeEvent(first)}\n`, { machine: tokenMachine, maxEvents: 2 })
+  assert.equal(accepted.trusted, true)
+  assert.deepEqual(accepted.problems, [])
+  const undeclared = `undeclared-${secret}`
+  for (const [field, expectedPointer] of [
+    ['from', '/events/0/from'], ['to', '/events/0/to'],
+  ]) {
+    const changed = { ...first, [field]: undeclared }
+    changed.hash = eventHash(GENESIS_HASH, changed)
+    const result = parseEventLog(`${serializeEvent(changed)}\n`, { machine: tokenMachine, maxEvents: 2 })
+    assert.equal(result.trusted, false)
+    assert.deepEqual(result.problems.map(({ ruleId }) => ruleId), ['event-state-unknown'])
+    assert.equal(JSON.stringify(result.problems).includes(secret), false)
+    assert.equal(result.problems[0].pointer, expectedPointer)
+    assert.match(result.problems[0].message, /machine does not declare/i)
+  }
+})
+
 test('a log line whose destination contradicts the machine is refused', () => {
   // Both states are declared, the chain is recomputed and verifies, the action
   // exists from that state: the ONLY thing wrong is where the machine says the

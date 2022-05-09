@@ -261,12 +261,13 @@ export function parseEventLog(text, { machine, maxEvents }) {
     // The log is verified against the machine it will be judged with. A state
     // or action the machine no longer declares means the projection cannot be
     // interpreted, which is unknown evidence rather than an old-but-fine log.
-    if (!machine.states.has(value.from) || !machine.states.has(value.to)) {
+    const undeclaredStateFields = ['from', 'to'].filter((field) => !machine.states.has(value[field]))
+    if (undeclaredStateFields.length > 0) {
+      const sourceFields = undeclaredStateFields.map((field) => `${pointer}/${field}`)
       problems.push(fault(
         'event-state-unknown',
-        pointer,
-        `Line ${number} moves "${excerpt(value.document, 60)}" between states the machine does not declare.`,
-        { evidence: `${excerpt(value.from, 40)} -> ${excerpt(value.to, 40)}` },
+        sourceFields.length === 1 ? sourceFields[0] : pointer,
+        `Line ${number} names a state the machine does not declare; inspect ${sourceFields.join(' and ')} against the machine definition.`,
       ))
       continue
     }

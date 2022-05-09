@@ -396,7 +396,7 @@ reporting nothing that fails it.
 | `event-revision-broken` | error | An event's revision does not follow the one before it. |
 | `event-sequence-broken` | error | `seq` is not contiguous from 1: a line was removed, reordered or inserted. |
 | `event-state-mismatch` | error | An event starts from a state the replay does not leave the document in. The finding points to that event's `from` field and does not echo either state ID, even when it would fit in a bounded excerpt. |
-| `event-state-unknown` | error | An event names a state the machine no longer declares. |
+| `event-state-unknown` | error | An event names a state the machine does not declare. The finding points to the undeclared `from` or `to` field, without echoing either state ID. |
 | `event-transition-unknown` | error | An event records a transition the machine does not declare. |
 | `identifier-invalid` | error | An identifier is empty, untrimmed, over 200 characters, or holds a control or bidi character. |
 | `input-not-json` | error | An input file is not valid JSON. |
