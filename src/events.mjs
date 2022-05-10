@@ -273,11 +273,11 @@ export function parseEventLog(text, { machine, maxEvents }) {
     }
     const transition = machine.byFrom.get(value.from)?.get(value.action) ?? null
     if (transition === null || transition.to !== value.to) {
+      const sourceField = transition === null ? 'action' : 'to'
       problems.push(fault(
         'event-transition-unknown',
-        pointer,
-        `Line ${number} records a transition the machine does not declare, so the log and the machine disagree about the lifecycle.`,
-        { evidence: `${excerpt(value.from, 40)} --${excerpt(value.action, 40)}--> ${excerpt(value.to, 40)}` },
+        `${pointer}/${sourceField}`,
+        `Line ${number} records a transition the machine does not declare; inspect ${pointer}/from, ${pointer}/action, and ${pointer}/to against the machine definition.`,
       ))
       continue
     }

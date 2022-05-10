@@ -216,13 +216,35 @@ test('a log line whose destination contradicts the machine is refused', () => {
   const result = replay(`${JSON.stringify(forged)}\n`)
   assert.equal(result.trusted, false)
   assert.deepEqual(result.problems.map((item) => item.ruleId), ['event-transition-unknown'])
-  assert.equal(result.problems[0].evidence, 'draft --submit--> published')
+  assert.equal(result.problems[0].pointer, '/events/0/to')
+  assert.match(result.problems[0].message, /inspect \/events\/0\/from/i)
+  assert.equal(result.problems[0].evidence, undefined)
   assert.equal(result.documents.size, 0, 'nothing may be projected from a line the machine contradicts')
   assert.equal(result.events.length, 0)
   // The chain itself is intact: the hash was recomputed over the forged body,
   // so nothing but the machine disagreement can be responsible for the refusal.
   assert.equal(result.problems.some((item) => item.ruleId === 'event-chain-broken'), false)
   assert.equal(result.problems.some((item) => item.ruleId === 'event-state-unknown'), false)
+})
+
+test('event-transition-unknown locates invalid action or destination without echoing state names', () => {
+  const { secret, machine: tokenMachine, first } = tokenStateFixture()
+  const accepted = parseEventLog(`${serializeEvent(first)}\n`, { machine: tokenMachine, maxEvents: 2 })
+  assert.equal(accepted.trusted, true)
+  assert.deepEqual(accepted.problems, [])
+  for (const [change, expectedPointer] of [
+    [{ to: 'done' }, '/events/0/to'],
+    [{ action: 'skip', to: 'done' }, '/events/0/action'],
+  ]) {
+    const changed = { ...first, ...change }
+    changed.hash = eventHash(GENESIS_HASH, changed)
+    const result = parseEventLog(`${serializeEvent(changed)}\n`, { machine: tokenMachine, maxEvents: 2 })
+    assert.equal(result.trusted, false)
+    assert.deepEqual(result.problems.map(({ ruleId }) => ruleId), ['event-transition-unknown'])
+    assert.equal(JSON.stringify(result.problems).includes(secret), false)
+    assert.equal(result.problems[0].pointer, expectedPointer)
+    assert.match(result.problems[0].message, /inspect \/events\/0\/from/i)
+  }
 })
 
 test('a log whose replay disagrees with an event’s "from" is refused', () => {
