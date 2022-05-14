@@ -147,7 +147,10 @@ Command keys: `commandId`, `document`, `action`, `actor`, `at`, `expectedRevisio
 
 `commandId`, `document`, `action` and `actor` are identifiers: non-empty strings of at most 200
 characters, with no leading or trailing whitespace and none of the characters listed under
-[Report](#report) below — C0, DEL, C1, U+2028, U+2029 and the bidi controls. `expectedRevision`
+[Report](#report) below — C0, DEL, C1, U+2028, U+2029 and the bidi controls. They must also render
+unchanged: repeated spaces and non-ASCII whitespace that collapse to one displayed space are
+not valid identities. One internal ASCII space, ordinary RTL letters and combining marks remain
+valid. An invalid identity's source pointer is reported without an ambiguous value excerpt. `expectedRevision`
 is required and must be an integer of at least 0.
 
 Letters are not the issue: an id in Arabic, Hebrew or any other right-to-left script is perfectly
@@ -398,7 +401,7 @@ reporting nothing that fails it.
 | `event-state-mismatch` | error | An event starts from a state the replay does not leave the document in. The finding points to that event's `from` field and does not echo either state ID, even when it would fit in a bounded excerpt. |
 | `event-state-unknown` | error | An event names a state the machine does not declare. The finding points to the undeclared `from` or `to` field, without echoing either state ID. |
 | `event-transition-unknown` | error | An event records a transition the machine does not declare. The finding points to its invalid `action` or `to` field and does not echo state IDs. |
-| `identifier-invalid` | error | An identifier is empty, untrimmed, over 200 characters, or holds a control or bidi character. |
+| `identifier-invalid` | error | An identifier is empty, over 200 characters, or changes when rendered (including controls, invisible marks and collapsing whitespace). |
 | `input-not-json` | error | An input file is not valid JSON. |
 | `input-not-utf8` | error | An input file is not valid UTF-8; nothing was read from it. |
 | `input-too-large` | error | An input file is above `maxFileBytes`; it was not read. |

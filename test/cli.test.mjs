@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
-import { CLI, NOW, TO_PUBLISHED, command, projectDirectory, workspace } from './support.mjs'
+import { CLI, MACHINE, NOW, TO_PUBLISHED, command, projectDirectory, workspace } from './support.mjs'
 
 const run = promisify(execFile)
 
@@ -47,6 +47,129 @@ test('the clean example passes, with the report on stdout and nothing else', asy
   assert.equal(report.summary.applied, 9)
   assert.equal(report.summary.replayed, 1)
   assert.deepEqual(report.findings.map((item) => item.ruleId), ['command-replayed'])
+})
+
+test('an actor whose whitespace collapses in the report is invalid, not an unknown actor', async () => {
+  const machine = structuredClone(MACHINE)
+  machine.actors.find((actor) => actor.id === 'alice').id = 'alice x'
+  await workspace(async ({ root }) => {
+    const args = ['--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+      '--now', NOW, '--json', '--dry-run']
+    const good = await cli(args)
+    assert.equal(good.code, 0)
+    assert.equal(JSON.parse(good.stdout).status, 'pass')
+    assert.equal(JSON.parse(good.stdout).summary.applied, 1)
+
+    for (const actor of ['alice  x', `alice${String.fromCharCode(0x2000)}x`]) {
+      await writeFile(join(root, 'commands.json'), JSON.stringify([command({ actor })]))
+      const bad = await cli(args)
+      assert.equal(bad.code, 1)
+      const report = JSON.parse(bad.stdout)
+      assert.equal(report.status, 'fail')
+      assert.equal(report.summary.applied, 0)
+      assert.equal(report.findings.some((finding) => finding.ruleId === 'actor-unknown'), false)
+      const invalid = report.findings.find((finding) => finding.ruleId === 'identifier-invalid'
+        && finding.location.pointer === '/commands/0/actor')
+      assert.ok(invalid)
+      assert.match(invalid.message, /render unchanged/)
+      assert.equal(invalid.evidence, undefined, 'a collapsed excerpt is not useful evidence')
+      assert.equal(bad.stdout.includes(actor), false, 'the raw invalid identity must not escape')
+      const human = await cli(args.filter((arg) => arg !== '--json'))
+      assert.equal(human.code, 1)
+      assert.doesNotMatch(human.stdout, /actor-unknown/)
+      assert.equal(human.stdout.includes(actor), false)
+    }
+  }, { machine, commands: [command({ actor: 'alice x' })] })
+})
+
+test('right-to-left letters and combining-mark actor identities remain usable', async () => {
+  for (const actor of ['\u0645\u0642\u0627\u0644-2', 'e\u0301dition']) {
+    const machine = structuredClone(MACHINE)
+    machine.actors.find((entry) => entry.id === 'alice').id = actor
+    await workspace(async ({ root }) => {
+      const result = await cli(['--root', root, '--machine', 'machine.json',
+        '--commands', 'commands.json', '--now', NOW, '--json', '--dry-run'])
+      assert.equal(result.code, 0)
+      const report = JSON.parse(result.stdout)
+      assert.equal(report.status, 'pass')
+      assert.equal(report.summary.applied, 1)
+      assert.deepEqual(report.findings, [])
+    }, { machine, commands: [command({ actor })] })
+  }
+})
+
+test('a role with collapsing whitespace is rejected at its source without a false excerpt', async () => {
+  const machine = structuredClone(MACHINE)
+  machine.roles[0] = 'author x'
+  for (const actor of machine.actors) actor.roles = actor.roles.map((role) => role === 'author' ? 'author x' : role)
+  for (const transition of machine.transitions) {
+    transition.roles = transition.roles.map((role) => role === 'author' ? 'author x' : role)
+  }
+  await workspace(async ({ root }) => {
+    const args = ['--root', root, '--machine', 'machine.json',
+      '--commands', 'commands.json', '--now', NOW, '--json', '--dry-run']
+    const good = await cli(args)
+    assert.equal(good.code, 0)
+    assert.equal(JSON.parse(good.stdout).status, 'pass')
+
+    const changed = structuredClone(machine)
+    changed.roles[0] = 'author  x'
+    for (const actor of changed.actors) {
+      actor.roles = actor.roles.map((role) => role === 'author x' ? 'author  x' : role)
+    }
+    for (const transition of changed.transitions) {
+      transition.roles = transition.roles.map((role) => role === 'author x' ? 'author  x' : role)
+    }
+    await writeFile(join(root, 'machine.json'), JSON.stringify(changed))
+    const result = await cli(args)
+    assert.equal(result.code, 2)
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.checked, 0)
+    const invalid = report.findings.find((finding) => finding.ruleId === 'identifier-invalid'
+      && finding.location.pointer === '/roles/0')
+    assert.ok(invalid)
+    assert.match(invalid.message, /render unchanged/)
+    assert.equal(invalid.evidence, undefined)
+  }, { machine, commands: [command()] })
+})
+
+test('state names that collapse to one human label are invalid before any command is decided', async () => {
+  for (const [name, expectedCode] of [
+    ['review ready', 0],
+    ['review  ready', 2],
+    [`review${String.fromCharCode(0x2000)}ready`, 2],
+  ]) {
+    const machine = structuredClone(MACHINE)
+    for (const state of machine.states) if (state.id === 'review') state.id = name
+    for (const transition of machine.transitions) {
+      if (transition.from === 'review') transition.from = name
+      if (transition.to === 'review') transition.to = name
+    }
+    await workspace(async ({ root }) => {
+      const args = ['--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+        '--now', NOW, '--dry-run']
+      const json = await cli([...args, '--json'])
+      const human = await cli(args)
+      assert.equal(json.code, expectedCode)
+      assert.equal(human.code, expectedCode)
+      const report = JSON.parse(json.stdout)
+      if (expectedCode === 0) {
+        assert.equal(report.status, 'pass')
+        assert.equal(report.summary.applied, 1)
+        assert.match(human.stdout, /post -> review ready @r1/)
+      } else {
+        assert.equal(report.status, 'incomplete')
+        assert.equal(report.summary.checked, 0)
+        const invalid = report.findings.find((finding) => finding.ruleId === 'identifier-invalid'
+          && finding.location.pointer === '/states/1/id')
+        assert.ok(invalid)
+        assert.equal(invalid.evidence, undefined, 'a collapsed state excerpt is not useful evidence')
+        assert.doesNotMatch(human.stdout, /post -> review ready @r1/)
+        assert.equal(json.stdout.includes(String.fromCharCode(0x2000)), false)
+      }
+    }, { machine, commands: [command()] })
+  }
 })
 
 test('visually empty default-ignorable actor identities cannot authorize clean commands', async () => {

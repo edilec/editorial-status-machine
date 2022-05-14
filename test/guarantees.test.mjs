@@ -163,7 +163,7 @@ test('createFinding sanitises every string it copies, not only the evidence', ()
   // line terminator reaching the report -- and a guarantee with no test that
   // kills it is a guarantee that quietly stops being true.
   const finding = createFinding({
-    ruleId: 'identifier-invalid',
+    ruleId: 'command-key-unknown',
     message: 'bad\nERROR   forged/ forged-rule invented',
     file: 'commands\njson',
     pointer: '/commands\n/0',
@@ -186,7 +186,7 @@ test('createFinding sanitises every string it copies, not only the evidence', ()
 
 test('createFinding bounds every string it copies', () => {
   const finding = createFinding({
-    ruleId: 'identifier-invalid',
+    ruleId: 'command-key-unknown',
     message: 'm'.repeat(1000),
     file: 'f'.repeat(1000),
     pointer: 'p'.repeat(1000),
@@ -209,7 +209,7 @@ test('an identifier carrying a line terminator cannot forge a line in the report
     assert.equal(JSON.stringify(finding).includes('\\n'), false)
     assert.equal((finding.evidence ?? '').includes('\n'), false)
   }
-  assert.match(report.findings[0].evidence, /^post ERROR commands\.json\/ forged-rule/)
+  assert.equal(report.findings[0].evidence, undefined, 'invalid identities are not excerpted')
 
   const human = formatReport(report, { machineName: 'test-lifecycle', documents: [] })
   const lines = human.trimEnd().split('\n')

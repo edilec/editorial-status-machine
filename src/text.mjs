@@ -69,9 +69,9 @@ const CONTROL = new RegExp(
 
 /**
  * What an identifier may not contain: the same four classes, plus the three
- * ASCII whitespace controls `CONTROL` leaves to the collapse. An identifier
- * has no such second pass, and a value that prints differently from the value
- * that was compared is a value nobody can audit.
+ * ASCII whitespace controls `CONTROL` leaves to the collapse. The final
+ * excerpt round-trip also refuses repeated or non-ASCII whitespace that would
+ * otherwise compare as one identity and display as another.
  */
 const FORBIDDEN_IN_IDENTIFIER = new RegExp(
   `[${String.fromCharCode(0)}-${String.fromCharCode(31)}` +
@@ -166,13 +166,16 @@ export function parseFailureDetail(error) {
  * map keys, written into an append-only log and printed. A control character
  * in one of them is refused at the door rather than cleaned up later, because
  * a value that prints differently from the value that was compared is a value
- * nobody can audit.
+ * nobody can audit. The explicit 200-character rendering limit avoids making
+ * the shorter diagnostic excerpt cap an undocumented identifier bound.
  */
 export function isIdentifier(value) {
   if (typeof value !== 'string') return false
   if (value.length === 0 || value.length > MAX_IDENTIFIER_LENGTH) return false
   if (value.trim() !== value) return false
-  return !FORBIDDEN_IN_IDENTIFIER.test(value) && !DEFAULT_IGNORABLE.test(value)
+  return !FORBIDDEN_IN_IDENTIFIER.test(value)
+    && !DEFAULT_IGNORABLE.test(value)
+    && excerpt(value, MAX_IDENTIFIER_LENGTH) === value
 }
 
 /**

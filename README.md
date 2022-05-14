@@ -119,8 +119,10 @@ Each of these has a test that fails when the line enforcing it is removed.
 - **Roles come from the machine.** A command names an actor and can never carry the roles it is
   judged against.
 - **Identifiers must remain visible as compared.** Default-ignorable characters such as CGJ or
-  variation selectors cannot serve as actor, state, action or command identities; unsupported
-  values are not echoed raw into the report.
+  variation selectors cannot serve as actor, state, action or command identities. Repeated or
+  non-ASCII whitespace that the report would collapse is refused too; one ordinary ASCII space
+  inside an id is valid. An invalid identity is located by source pointer, not echoed as a
+  misleading normalized excerpt. Ordinary right-to-left letters and combining marks remain valid.
 - **Finding file locations identify the actual file.** Unsafe path characters and literal escape
   text remain distinguishable; long paths use a bounded prefix and SHA-256 of their UTF-16 units.
 - **A command names an action, not a destination**, so no expressible command skips a state.

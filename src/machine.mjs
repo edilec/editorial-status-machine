@@ -72,7 +72,7 @@ function readIdentifierList(value, pointer, problems, label) {
       problems.push(problem(
         'identifier-invalid',
         `${pointer}/${index}`,
-        `${label} entry is not a usable identifier: it must be a non-empty, trimmed string of at most 200 characters with no control characters.`,
+        `${label} entry is not a usable identifier: it must be non-empty, at most 200 characters, and render unchanged; collapsing whitespace and invisible characters are not valid identities.`,
         { evidence: excerpt(typeof entry === 'string' ? entry : JSON.stringify(entry) ?? 'undefined', 60) },
       ))
       continue

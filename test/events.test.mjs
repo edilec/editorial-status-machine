@@ -259,21 +259,21 @@ test('a log whose replay disagrees with an event’s "from" is refused', () => {
   assert.ok(result.problems.some((item) => item.ruleId === 'event-state-mismatch'))
 })
 
-test('a replay mismatch never describes two different accepted states as the same state', () => {
+test('a replay mismatch between accepted states names only the source field', () => {
   const compiled = compileMachine({
-    schemaVersion: '1', name: 'space-distinction', initialState: 'review ready',
+    schemaVersion: '1', name: 'state-distinction', initialState: 'review ready',
     roles: ['editor'], actors: [{ id: 'alice', roles: ['editor'] }],
-    states: [{ id: 'review ready' }, { id: 'review  ready' }, { id: 'done', terminal: true }],
+    states: [{ id: 'review ready' }, { id: 'review-ready' }, { id: 'done', terminal: true }],
     transitions: [
-      { from: 'review ready', action: 'advance', to: 'review  ready', roles: ['editor'] },
+      { from: 'review ready', action: 'advance', to: 'review-ready', roles: ['editor'] },
       { from: 'review ready', action: 'finish', to: 'done', roles: ['editor'] },
-      { from: 'review  ready', action: 'finish', to: 'done', roles: ['editor'] },
+      { from: 'review-ready', action: 'finish', to: 'done', roles: ['editor'] },
     ],
   }, DEFAULT_LIMITS)
   assert.notEqual(compiled.machine, null)
   const first = {
     seq: 1, commandId: 'c-1', document: 'doc-a', action: 'advance',
-    from: 'review ready', to: 'review  ready', actor: 'alice',
+    from: 'review ready', to: 'review-ready', actor: 'alice',
     at: '2026-03-01T09:00:00.000Z', revision: 1, scheduledFor: null,
     commandHash: 'a'.repeat(64),
   }

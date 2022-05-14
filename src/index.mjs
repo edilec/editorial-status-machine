@@ -319,7 +319,11 @@ export function createFinding(row) {
     message: excerpt(row.message, MESSAGE_LIMIT),
     location: { file: pathLabel(row.file), pointer: excerpt(row.pointer, LOCATION_LIMIT) },
   }
-  if (row.evidence !== undefined && row.evidence !== '') finding.evidence = excerpt(row.evidence)
+  // An invalid identifier can flatten to the same excerpt as a valid one.
+  // The source pointer identifies it; a normalized excerpt would mislead.
+  if (row.ruleId !== 'identifier-invalid' && row.evidence !== undefined && row.evidence !== '') {
+    finding.evidence = excerpt(row.evidence)
+  }
   if (row.suggestion !== undefined) finding.suggestion = excerpt(row.suggestion, SUGGESTION_LIMIT)
   return finding
 }

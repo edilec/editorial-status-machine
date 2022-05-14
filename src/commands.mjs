@@ -70,7 +70,7 @@ export function validateCommand(value, index, nowMs) {
       problems.push(fault(
         'identifier-invalid',
         `${pointer}/${field}`,
-        `Field "${field}" is not a usable identifier: it must be a non-empty, trimmed string of at most 200 characters with no control characters.`,
+        `Field "${field}" is not a usable identifier: it must be non-empty, at most 200 characters, and render unchanged; collapsing whitespace and invisible characters are not valid identities.`,
         {
           evidence: excerpt(
             typeof value[field] === 'string' ? value[field] : JSON.stringify(value[field]) ?? 'undefined',

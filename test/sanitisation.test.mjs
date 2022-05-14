@@ -81,7 +81,7 @@ test('isIdentifier refuses every class at the door', () => {
   }
 })
 
-test('a document id carrying any class is refused, and its evidence is flattened', async () => {
+test('a document id carrying any class is refused without echoing its ambiguous excerpt', async () => {
   for (const [label, code] of CLASSES) {
     const { report } = await workspace(
       async ({ root }) => runEditorialMachine({
@@ -91,7 +91,7 @@ test('a document id carrying any class is refused, and its evidence is flattened
     )
     assert.equal(report.status, 'fail', label)
     assert.deepEqual(report.findings.map((item) => item.ruleId), ['identifier-invalid'], label)
-    assert.equal(report.findings[0].evidence, 'post id', label)
+    assert.equal(report.findings[0].evidence, undefined, label)
     assert.equal(JSON.stringify(report).includes(String.fromCharCode(code)), false, label)
 
     const human = formatReport(report, { machineName: 'test-lifecycle', documents: [] })
