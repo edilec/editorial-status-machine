@@ -123,6 +123,8 @@ Each of these has a test that fails when the line enforcing it is removed.
   non-ASCII whitespace that the report would collapse is refused too; one ordinary ASCII space
   inside an id is valid. An invalid identity is located by source pointer, not echoed as a
   misleading normalized excerpt. Ordinary right-to-left letters and combining marks remain valid.
+  When a passing human summary shortens a document or state name, it appends a report-local
+  document ordinal or the state's machine declaration pointer to distinguish the identities.
 - **Finding file locations identify the actual file.** Unsafe path characters and literal escape
   text remain distinguishable; long paths use a bounded prefix and SHA-256 of their UTF-16 units.
 - **A command names an action, not a destination**, so no expressible command skips a state.

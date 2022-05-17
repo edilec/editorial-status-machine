@@ -422,6 +422,8 @@ function notEvaluated(collector, file, reason) {
 }
 
 function projectDocuments(machine, documents) {
+  const statePointers = new Map(machine === null ? []
+    : [...machine.states.keys()].map((state, index) => [state, `/states/${index}`]))
   const rows = [...documents.entries()].map(([document, state]) => ({
     document,
     state: state.state,
@@ -430,7 +432,7 @@ function projectDocuments(machine, documents) {
     lastAt: state.lastAt,
   }))
   rows.sort((left, right) => byCodeUnit(left.document, right.document))
-  return { initialState: machine === null ? null : machine.initialState, documents: rows }
+  return { initialState: machine === null ? null : machine.initialState, documents: rows, statePointers }
 }
 
 /**
@@ -804,6 +806,7 @@ export async function runEditorialMachine(options = {}) {
     eventLogPath,
     decisions,
     documents: projection.documents,
+    statePointers: projection.statePointers,
     /**
      * Appending is refused unless the log this run read verified end to end.
      * Writing new events onto a log whose chain is broken would extend a
@@ -829,9 +832,16 @@ export function formatReport(report, extra = {}) {
     `${summary.checked} of ${summary.commands} command(s) decided: ${summary.applied} applied, ${summary.replayed} replayed, ${summary.rejected} rejected, status ${report.status}.`,
     `log: ${summary.priorEvents} prior event(s), ${summary.newEvents} new event(s), ${summary.documents} document(s) projected.`,
   ]
-  for (const row of extra.documents ?? []) {
+  for (const [index, row] of (extra.documents ?? []).entries()) {
     const schedule = row.scheduledFor === null ? '' : ` scheduled ${excerpt(row.scheduledFor, 40)}`
-    lines.push(`  ${excerpt(row.document, 80)} -> ${excerpt(row.state, 40)} @r${row.revision}${schedule}`)
+    const documentLabel = excerpt(row.document, 80)
+    const documentPosition = row.document.length > 80
+      ? ` [document ${index}]` : ''
+    const stateLabel = excerpt(row.state, 40)
+    const statePointer = extra.statePointers instanceof Map ? extra.statePointers.get(row.state) : null
+    const statePosition = row.state.length > 40
+      ? ` [machine${statePointer ?? '/states/position-unavailable'}]` : ''
+    lines.push(`  ${documentLabel}${documentPosition} -> ${stateLabel}${statePosition} @r${row.revision}${schedule}`)
   }
   for (const finding of report.findings) {
     lines.push(

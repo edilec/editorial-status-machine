@@ -172,6 +172,66 @@ test('state names that collapse to one human label are invalid before any comman
   }
 })
 
+test('truncated document and state summaries retain distinct report and machine positions', async () => {
+  const machine = structuredClone(MACHINE)
+  const prefix = 's'.repeat(40)
+  const reviewState = `${prefix}X`
+  const approvedState = `${prefix}Y`
+  for (const state of machine.states) {
+    if (state.id === 'review') state.id = reviewState
+    if (state.id === 'approved') state.id = approvedState
+  }
+  for (const transition of machine.transitions) {
+    if (transition.from === 'review') transition.from = reviewState
+    if (transition.to === 'review') transition.to = reviewState
+    if (transition.from === 'approved') transition.from = approvedState
+    if (transition.to === 'approved') transition.to = approvedState
+  }
+  machine.transitions.push({ from: 'draft', action: 'fast', to: approvedState, roles: ['author'] })
+  const documentPrefix = 'd'.repeat(80)
+  const commands = [
+    command({ commandId: 'c-one', document: `${documentPrefix}A`, action: 'submit' }),
+    command({ commandId: 'c-two', document: `${documentPrefix}B`, action: 'fast' }),
+  ]
+  await workspace(async ({ root }) => {
+    const args = ['--root', root, '--machine', 'machine.json', '--commands', 'commands.json',
+      '--now', NOW, '--dry-run']
+    const result = await cli(args)
+    const json = await cli([...args, '--json'])
+    assert.equal(result.code, 0)
+    assert.equal(json.code, 0)
+    assert.equal(JSON.parse(json.stdout).status, 'pass')
+    assert.equal(JSON.parse(json.stdout).summary.applied, 2)
+    const lines = result.stdout.split('\n').filter((line) => line.includes(' -> '))
+    assert.equal(lines.length, 2)
+    assert.notEqual(lines[0], lines[1])
+    assert.match(lines[0], /\[document 0\].*\[machine\/states\/1\]/u)
+    assert.match(lines[1], /\[document 1\].*\[machine\/states\/2\]/u)
+    assert.equal(result.stdout.includes(reviewState), false, 'the hidden suffix need not be printed')
+    assert.equal(result.stdout.includes(approvedState), false)
+  }, { machine, commands })
+
+  const control = await cli([...CLEAN, '--now', NOW, '--dry-run'])
+  assert.equal(control.code, 0)
+  assert.match(control.stdout, /post-hello -> scheduled @r3/u)
+  assert.doesNotMatch(control.stdout, /\[document \d+\]|\[machine\/states\/\d+\]/u)
+
+  const atBoundMachine = structuredClone(MACHINE)
+  const atBoundState = 's'.repeat(40)
+  for (const state of atBoundMachine.states) if (state.id === 'review') state.id = atBoundState
+  for (const transition of atBoundMachine.transitions) {
+    if (transition.from === 'review') transition.from = atBoundState
+    if (transition.to === 'review') transition.to = atBoundState
+  }
+  await workspace(async ({ root }) => {
+    const atBound = await cli(['--root', root, '--machine', 'machine.json',
+      '--commands', 'commands.json', '--now', NOW, '--dry-run'])
+    assert.equal(atBound.code, 0)
+    assert.match(atBound.stdout, new RegExp(`  ${'d'.repeat(80)} -> ${atBoundState} @r1`, 'u'))
+    assert.doesNotMatch(atBound.stdout, /\[document \d+\]|\[machine\/states\/\d+\]/u)
+  }, { machine: atBoundMachine, commands: [command({ document: 'd'.repeat(80) })] })
+})
+
 test('visually empty default-ignorable actor identities cannot authorize clean commands', async () => {
   const machine = JSON.parse(await readFile(join(projectDirectory, 'examples/clean/machine.json'), 'utf8'))
   const commands = JSON.parse(await readFile(join(projectDirectory, 'examples/clean/commands.json'), 'utf8'))

@@ -354,6 +354,11 @@ Every limit is enforced, overridable, and reported by name when it is hit. Excee
 | `maxActors` | `--max-actors` | 512 |
 
 Identifiers are additionally bounded at 200 characters, and excerpts in findings at 160.
+Human document summaries shorten document names at 80 characters and state names at 40.
+Only shortened labels receive positional suffixes: `[document N]` is the zero-based
+document position in this report's sorted projection, and `[machine/states/N]`
+identifies the state declaration in the machine file. The full hidden suffix is
+not printed.
 
 Unknown configuration is refused everywhere: an unknown CLI flag, an unknown option key, an
 unknown limit name, an unknown machine key, an unknown command key and an unknown event field are

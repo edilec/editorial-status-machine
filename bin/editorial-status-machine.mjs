@@ -195,7 +195,8 @@ async function main(argv) {
 
   process.stdout.write(options.json
     ? `${JSON.stringify(report, null, 2)}\n`
-    : formatReport(report, { machineName: result.machineName, documents: result.documents }))
+    : formatReport(report, { machineName: result.machineName, documents: result.documents,
+      statePointers: result.statePointers }))
 
   if (report.status === 'incomplete') {
     process.stderr.write(
