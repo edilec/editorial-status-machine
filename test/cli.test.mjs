@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
+import { formatReport, runEditorialMachine } from '../src/index.mjs'
 import { CLI, MACHINE, NOW, TO_PUBLISHED, command, projectDirectory, workspace } from './support.mjs'
 
 const run = promisify(execFile)
@@ -209,6 +210,15 @@ test('truncated document and state summaries retain distinct report and machine 
     assert.match(lines[1], /\[document 1\].*\[machine\/states\/2\]/u)
     assert.equal(result.stdout.includes(reviewState), false, 'the hidden suffix need not be printed')
     assert.equal(result.stdout.includes(approvedState), false)
+
+    const api = await runEditorialMachine({ root, machine: 'machine.json',
+      commands: 'commands.json', now: NOW })
+    const helper = formatReport(api.report, { machineName: api.machineName, documents: api.documents })
+    const helperStates = helper.split('\n').filter((line) => line.includes(' -> '))
+      .map((line) => line.split(' -> ')[1].split(' @r')[0])
+    assert.deepEqual(helperStates.map((state) => /\[report-state \d+\]/u.test(state)), [true, true])
+    assert.notEqual(helperStates[0], helperStates[1],
+      'the exported helper must distinguish states with its existing call shape')
   }, { machine, commands })
 
   const control = await cli([...CLEAN, '--now', NOW, '--dry-run'])

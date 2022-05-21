@@ -827,12 +827,15 @@ const SEVERITY_WIDTH = 7
 
 export function formatReport(report, extra = {}) {
   const { summary } = report
+  const documentRows = Array.from(extra.documents ?? [])
+  const reportStatePositions = new Map([...new Set(documentRows.map((row) => row.state))]
+    .sort(byCodeUnit).map((state, index) => [state, index]))
   const lines = [
     `machine ${excerpt(extra.machineName ?? 'not compiled', 80)}: ${summary.states} state(s), ${summary.transitions} transition(s).`,
     `${summary.checked} of ${summary.commands} command(s) decided: ${summary.applied} applied, ${summary.replayed} replayed, ${summary.rejected} rejected, status ${report.status}.`,
     `log: ${summary.priorEvents} prior event(s), ${summary.newEvents} new event(s), ${summary.documents} document(s) projected.`,
   ]
-  for (const [index, row] of (extra.documents ?? []).entries()) {
+  for (const [index, row] of documentRows.entries()) {
     const schedule = row.scheduledFor === null ? '' : ` scheduled ${excerpt(row.scheduledFor, 40)}`
     const documentLabel = excerpt(row.document, 80)
     const documentPosition = row.document.length > 80
@@ -840,7 +843,10 @@ export function formatReport(report, extra = {}) {
     const stateLabel = excerpt(row.state, 40)
     const statePointer = extra.statePointers instanceof Map ? extra.statePointers.get(row.state) : null
     const statePosition = row.state.length > 40
-      ? ` [machine${statePointer ?? '/states/position-unavailable'}]` : ''
+      ? statePointer === undefined || statePointer === null
+        ? ` [report-state ${reportStatePositions.get(row.state)}]`
+        : ` [machine${statePointer}]`
+      : ''
     lines.push(`  ${documentLabel}${documentPosition} -> ${stateLabel}${statePosition} @r${row.revision}${schedule}`)
   }
   for (const finding of report.findings) {

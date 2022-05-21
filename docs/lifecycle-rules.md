@@ -358,7 +358,10 @@ Human document summaries shorten document names at 80 characters and state names
 Only shortened labels receive positional suffixes: `[document N]` is the zero-based
 document position in this report's sorted projection, and `[machine/states/N]`
 identifies the state declaration in the machine file. The full hidden suffix is
-not printed.
+not printed. A caller using the exported `formatReport` helper without a
+machine-state pointer map instead gets a distinct `[report-state N]` ordinal
+for each raw state in that report; it is a report-local label, not a source
+claim.
 
 Unknown configuration is refused everywhere: an unknown CLI flag, an unknown option key, an
 unknown limit name, an unknown machine key, an unknown command key and an unknown event field are
