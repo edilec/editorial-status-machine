@@ -163,6 +163,8 @@ export function parseEventLog(text, { machine, maxEvents }) {
   }
 
   let previousHash = GENESIS_HASH
+  let chainKnown = true
+  let projectionKnown = true
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
@@ -178,10 +180,14 @@ export function parseEventLog(text, { machine, maxEvents }) {
         pointer,
         `Line ${number} is not a JSON object: ${excerpt(parseFailureDetail(error), 80)}.`,
       ))
+      chainKnown = false
+      projectionKnown = false
       continue
     }
     if (!isPlainObject(value)) {
       problems.push(fault('event-line-invalid', pointer, `Line ${number} is not a JSON object.`))
+      chainKnown = false
+      projectionKnown = false
       continue
     }
 
@@ -198,7 +204,11 @@ export function parseEventLog(text, { machine, maxEvents }) {
         broken = true
       }
     }
-    if (broken) continue
+    if (broken) {
+      chainKnown = false
+      projectionKnown = false
+      continue
+    }
 
     for (const field of ['commandId', 'document', 'action', 'from', 'to', 'actor']) {
       if (!isIdentifier(value[field])) {
@@ -235,28 +245,39 @@ export function parseEventLog(text, { machine, maxEvents }) {
         broken = true
       }
     }
-    if (broken) continue
-
-    if (value.seq !== index + 1) {
+    const sequenceBroken = !broken && value.seq !== index + 1
+    if (sequenceBroken) {
       problems.push(fault(
         'event-sequence-broken',
         pointer,
         `Line ${number} carries seq ${value.seq}; a log must number its events from 1 with no gap, so a line has been removed, reordered or inserted.`,
       ))
+      projectionKnown = false
+    }
+    // A complete body with a valid stored hash can establish the next chain
+    // link even when a field cannot be interpreted by this machine. Semantic
+    // replay and cryptographic continuity are separate kinds of evidence.
+    if (chainKnown && typeof value.hash === 'string' && HEX_64.test(value.hash)) {
+      const expectedHash = eventHash(previousHash, value)
+      if (expectedHash !== value.hash) {
+        problems.push(fault(
+          'event-chain-broken',
+          pointer,
+          `Line ${number} does not match the hash chain; this event or an earlier one has been altered since it was written.`,
+          { suggestion: 'Restore the log from its authoritative copy. This tool never rewrites a log to make it verify.' },
+        ))
+        return { events, documents, byCommandId, problems, trusted: false }
+      }
+      previousHash = value.hash
+    } else {
+      chainKnown = false
+    }
+    if (broken || sequenceBroken) {
+      projectionKnown = false
       continue
     }
 
-    const expectedHash = eventHash(previousHash, value)
-    if (expectedHash !== value.hash) {
-      problems.push(fault(
-        'event-chain-broken',
-        pointer,
-        `Line ${number} does not match the hash chain; this event or an earlier one has been altered since it was written.`,
-        { suggestion: 'Restore the log from its authoritative copy. This tool never rewrites a log to make it verify.' },
-      ))
-      return { events, documents, byCommandId, problems, trusted: false }
-    }
-    previousHash = value.hash
+    if (!projectionKnown) continue
 
     // The log is verified against the machine it will be judged with. A state
     // or action the machine no longer declares means the projection cannot be
@@ -269,6 +290,7 @@ export function parseEventLog(text, { machine, maxEvents }) {
         sourceFields.length === 1 ? sourceFields[0] : pointer,
         `Line ${number} names a state the machine does not declare; inspect ${sourceFields.join(' and ')} against the machine definition.`,
       ))
+      projectionKnown = false
       continue
     }
     const transition = machine.byFrom.get(value.from)?.get(value.action) ?? null
@@ -279,6 +301,7 @@ export function parseEventLog(text, { machine, maxEvents }) {
         `${pointer}/${sourceField}`,
         `Line ${number} records a transition the machine does not declare; inspect ${pointer}/from, ${pointer}/action, and ${pointer}/to against the machine definition.`,
       ))
+      projectionKnown = false
       continue
     }
 
@@ -288,6 +311,7 @@ export function parseEventLog(text, { machine, maxEvents }) {
         pointer,
         `Line ${number} replays command id "${excerpt(value.commandId, 60)}", which line ${byCommandId.get(value.commandId).seq} already recorded; the log itself applied one command twice.`,
       ))
+      projectionKnown = false
       continue
     }
 
@@ -298,6 +322,7 @@ export function parseEventLog(text, { machine, maxEvents }) {
         `${pointer}/from`,
         `Line ${number} starts from a state that differs from the replayed state for this document; inspect ${pointer}/from and earlier accepted events.`,
       ))
+      projectionKnown = false
       continue
     }
     if (value.revision !== current.revision + 1) {
@@ -306,6 +331,7 @@ export function parseEventLog(text, { machine, maxEvents }) {
         pointer,
         `Line ${number} carries revision ${value.revision} for "${excerpt(value.document, 60)}"; replaying the log expects ${current.revision + 1}.`,
       ))
+      projectionKnown = false
       continue
     }
     if (current.lastAtMs !== null && at.ms < current.lastAtMs) {
@@ -315,6 +341,7 @@ export function parseEventLog(text, { machine, maxEvents }) {
         `Line ${number} is timestamped before the previous event for "${excerpt(value.document, 60)}"; an append-only log cannot move backwards in time.`,
         { evidence: `${excerpt(value.at, 40)} < ${excerpt(current.lastAt, 40)}` },
       ))
+      projectionKnown = false
       continue
     }
 

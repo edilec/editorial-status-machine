@@ -111,6 +111,44 @@ test('a valid log replays into the projection the events describe', () => {
   assert.deepEqual([...result.byCommandId.keys()], ['c-1', 'c-2', 'c-3'])
 })
 
+test('a semantically invalid event with an intact hash cannot invent a later chain break', () => {
+  const goodText = log(THREE_STEPS.slice(0, 2))
+  const good = replay(goodText)
+  assert.equal(good.trusted, true)
+  assert.deepEqual(good.problems, [])
+
+  const [first, second] = goodText.trimEnd().split('\n').map(JSON.parse)
+  first.to = `review${String.fromCodePoint(0x200e)}`
+  first.hash = eventHash(GENESIS_HASH, first)
+  second.hash = eventHash(first.hash, second)
+  assert.equal(eventHash(GENESIS_HASH, first), first.hash)
+  assert.equal(eventHash(first.hash, second), second.hash)
+
+  const intactText = `${serializeEvent(first)}\n${serializeEvent(second)}\n`
+  const invalid = replay(intactText)
+  assert.equal(invalid.trusted, false)
+  assert.deepEqual(invalid.problems.map((item) => item.ruleId), ['event-field-invalid'])
+  assert.equal(invalid.problems[0].pointer, '/events/0/to')
+  assert.equal(invalid.events.length, 0, 'semantic replay cannot resume after an unknown state')
+  assert.equal(invalid.documents.size, 0)
+
+  const alteredSecond = { ...second, actor: 'mallory' }
+  const tampered = replay(`${serializeEvent(first)}\n${serializeEvent(alteredSecond)}\n`)
+  assert.equal(tampered.trusted, false)
+  assert.deepEqual(tampered.problems.map((item) => item.ruleId),
+    ['event-field-invalid', 'event-chain-broken'])
+  assert.equal(tampered.problems[1].pointer, '/events/1')
+})
+
+test('an unhashable earlier line leaves later chain evidence unknown', () => {
+  const [, secondLine] = log(THREE_STEPS.slice(0, 2)).trimEnd().split('\n')
+  const result = replay(`not-json\n${secondLine}\n`)
+  assert.equal(result.trusted, false)
+  assert.deepEqual(result.problems.map((item) => item.ruleId), ['event-line-invalid'])
+  assert.equal(result.events.length, 0)
+  assert.equal(result.documents.size, 0)
+})
+
 test('the chain hash covers field values, so editing any one of them breaks it', () => {
   const lines = log(THREE_STEPS).trimEnd().split('\n')
   const tampered = JSON.parse(lines[1])
