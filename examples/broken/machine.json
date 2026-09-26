@@ -1,0 +1,147 @@
+{
+  "schemaVersion": "1",
+  "name": "edilec-editorial-lifecycle-with-gaps",
+  "initialState": "draft",
+  "roles": [
+    "author",
+    "editor",
+    "publisher",
+    "archivist"
+  ],
+  "states": [
+    {
+      "id": "draft",
+      "description": "Being written. Nothing outside the team can see it."
+    },
+    {
+      "id": "review",
+      "description": "Submitted for editorial review."
+    },
+    {
+      "id": "approved",
+      "description": "Cleared for publication, not yet public."
+    },
+    {
+      "id": "scheduled",
+      "description": "Cleared and holding for a publication instant."
+    },
+    {
+      "id": "published",
+      "description": "Public."
+    },
+    {
+      "id": "retired",
+      "terminal": true,
+      "description": "Withdrawn from the public site. Terminal."
+    },
+    {
+      "id": "legal-hold",
+      "description": "Declared but wired to nothing: no transition reaches it and none leaves it."
+    }
+  ],
+  "actors": [
+    {
+      "id": "alice",
+      "roles": [
+        "author"
+      ]
+    },
+    {
+      "id": "bob",
+      "roles": [
+        "editor"
+      ]
+    },
+    {
+      "id": "dana",
+      "roles": [
+        "publisher"
+      ]
+    },
+    {
+      "id": "eve",
+      "roles": [
+        "archivist"
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "from": "draft",
+      "action": "submit",
+      "to": "review",
+      "roles": [
+        "author",
+        "editor"
+      ]
+    },
+    {
+      "from": "review",
+      "action": "approve",
+      "to": "approved",
+      "roles": [
+        "editor"
+      ]
+    },
+    {
+      "from": "review",
+      "action": "reject",
+      "to": "draft",
+      "roles": [
+        "editor"
+      ]
+    },
+    {
+      "from": "approved",
+      "action": "schedule",
+      "to": "scheduled",
+      "roles": [
+        "publisher"
+      ],
+      "setsSchedule": true
+    },
+    {
+      "from": "approved",
+      "action": "publish",
+      "to": "published",
+      "roles": [
+        "publisher"
+      ]
+    },
+    {
+      "from": "scheduled",
+      "action": "unschedule",
+      "to": "approved",
+      "roles": [
+        "publisher"
+      ]
+    },
+    {
+      "from": "scheduled",
+      "action": "publish",
+      "to": "published",
+      "roles": [
+        "publisher"
+      ],
+      "requiresSchedule": true
+    },
+    {
+      "from": "published",
+      "action": "revise",
+      "to": "draft",
+      "roles": [
+        "author",
+        "editor"
+      ]
+    },
+    {
+      "from": "published",
+      "action": "retire",
+      "to": "retired",
+      "roles": [
+        "archivist",
+        "publisher"
+      ]
+    }
+  ]
+}
