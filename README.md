@@ -24,15 +24,17 @@ And a fourth thing that is not a refusal at all: a command whose id is already i
 ## Install
 
 ```sh
-npm install editorial-status-machine
+npm install github:edilec/editorial-status-machine
 ```
+
+This installs the public GitHub source; `editorial-status-machine` is not published to npm.
 
 Or run it from a checkout with `node bin/editorial-status-machine.mjs`.
 
 ## Use
 
 ```sh
-editorial-status-machine \
+npx editorial-status-machine \
   --root examples/clean \
   --machine machine.json \
   --commands commands.json \
